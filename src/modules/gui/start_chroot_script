@@ -16,7 +16,7 @@ ln -s /opt/custompios/scripts /home/pi/scripts
 echo exit 101 > /usr/sbin/policy-rc.d
 chmod +x /usr/sbin/policy-rc.d
 
-apt_update_skip
+apt-get update
 apt-get install -y --force-yes matchbox-window-manager xorg lightdm xinput
 if [ "$GUI_INCLUDE_ACCELERATION" == "yes" ]
     then
