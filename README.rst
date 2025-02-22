@@ -156,6 +156,14 @@ Usage
 #. Run ``src/build`` as root.
 #. The final image will be created at the ``src/workspace``
 
+Testing
+-------
+
+You can run unit tests to test CustomPiOS if you have changed it by running::
+
+    make test
+
+You can add more tests to the ``tests`` folder.
 
 Community
 --------
