@@ -29,6 +29,8 @@ FILENAME=$(basename `ls . |  grep -e .img$ -e .raw$ | tail -n 1`)
 if [ "${BASE_RELEASE_IMG_NAME}" == "default" ]; then
     if [ "${BASE_DISTRO}" == "ubuntu" ]; then
         CHANGE_STRING_LIST=( "ubuntu" )
+    elif [ "${BASE_BOARD}" == debian_* ]; then
+        CHANGE_STRING_LIST=( "debian" )
     else
         CHANGE_STRING_LIST=( "raspbian" "raspios")
     fi
