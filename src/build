@@ -15,6 +15,24 @@ source ${DIST_PATH}/config
 
 define SCRIPT <<'EOF'
 BUILD_SCRIPT_PATH=$(dirname $(realpath -s $BASH_SOURCE))
+
+# Config file can override BASE_BOARD from cli
+CONFIG_FILE="${DIST_PATH}"/config
+
+if [ -f "${CONFIG_FILE}" ]; then
+    echo "Found a dist config file, if BASE_BOARD is set there will source it before generating the extra board config"
+    BASE_BOARD_FROM_CONFIG=$(bash -c "source \"$CONFIG_FILE\" >/dev/null 2>&1; echo \$BASE_BOARD")
+    if [ -n "$BASE_BOARD_FROM_CONFIG" ]; then
+        export BASE_BOARD="$BASE_BOARD_FROM_CONFIG"
+        echo "BASE_BOARD set to ${BASE_BOARD} from ${CONFIG_FILE} before generating board config."
+    else
+        echo "BASE_BOARD not found in ${CONFIG_FILE}. It will be set from the cli or fallback to raspberrypiarmhf"
+    fi
+else
+    echo "Config file ${CONFIG_FILE} does not exist. You probably want to create one for you distrubtion."
+fi
+
+
 export EXTRA_BOARD_CONFIG=$(mktemp)
 ${BUILD_SCRIPT_PATH}/custompios_core/generate_board_config.py "${EXTRA_BOARD_CONFIG}"
 echo "Temp source file: ${EXTRA_BOARD_CONFIG}"
