@@ -170,10 +170,10 @@ then
   fi
   touch /"${BASE_BOOT_MOUNT_PATH}"/ssh
   ### Fix SSH incoming
-  echo "IPQoS 0x00" >> /etc/ssh/sshd_config
+  echo "IPQoS throughput" >> /etc/ssh/sshd_config
 
-  ### Fix SSH outgoing
-  echo "IPQoS 0x00" >> /etc/ssh/ssh_config
+  # Restart ssh
+  echo "IPQoS throughput" >> /etc/ssh/ssh_config
   
   ### Try and fix https://github.com/guysoft/OctoPi/issues/424
   if [ -f "/lib/systemd/system/regenerate_ssh_host_keys.service" ]; then
