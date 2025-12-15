@@ -21,7 +21,7 @@ apt-get install -y --force-yes matchbox-window-manager xorg lightdm xinput
 if [ "$GUI_INCLUDE_ACCELERATION" == "yes" ]
     then
         apt_update_skip
-        apt-get -y --force-yes install xcompmgr libgl1-mesa-dri mesa-utils compton libconfig9
+        apt-get -y --force-yes install xcompmgr libgl1-mesa-dri mesa-utils compton libconfig11
         
         # Hack to pass non-interactive install
         mv /usr/bin/whiptail /usr/bin/whiptail.bak
