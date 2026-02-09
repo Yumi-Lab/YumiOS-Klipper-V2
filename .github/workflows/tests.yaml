@@ -3,12 +3,7 @@ name: Run Tests via Makefile
 on:
   push:
     branches:
-      - "master"
-      - "devel"
-      - "docker-github-actions"
-      - "release/v1"
-      - "feature/unit-testing"
-      - "beta"
+      - "*"
     tags:
       - "*"
 
