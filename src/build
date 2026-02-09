@@ -8,10 +8,22 @@ set -x
 
 define(){ IFS='\n' read -r -d '' ${1} || true; }
 
-# Pre-seed: source dist config and config.local to seed generate_board_config.py
-# with BASE_BOARD. The full/authoritative config sourcing happens later via
-# ${CUSTOM_PI_OS_PATH}/config inside the heredoc.
+# Pre-seed: source dist config, variant config, and config.local to seed
+# generate_board_config.py with BASE_BOARD. The full/authoritative config
+# sourcing happens later via ${CUSTOM_PI_OS_PATH}/config inside the heredoc.
+# Priority (lowest to highest): dist config < variant config < config.local
 source ${DIST_PATH}/config
+
+# Pre-seed variant config if a non-default variant is specified
+_PRESEED_VARIANT="${1:-default}"
+if [ "${_PRESEED_VARIANT}" != "default" ]; then
+    if [ -f "${DIST_PATH}/variants/${_PRESEED_VARIANT}/config" ]; then
+        source "${DIST_PATH}/variants/${_PRESEED_VARIANT}/config"
+    elif [ -f "${CUSTOM_PI_OS_PATH}/variants/${_PRESEED_VARIANT}/config" ]; then
+        source "${CUSTOM_PI_OS_PATH}/variants/${_PRESEED_VARIANT}/config"
+    fi
+fi
+
 if [ -f "${DIST_PATH}/config.local" ]; then
     source "${DIST_PATH}/config.local"
 fi
@@ -24,16 +36,28 @@ CONFIG_FILE="${DIST_PATH}"/config
 
 CONFIG_LOCAL_FILE="${DIST_PATH}"/config.local
 
+# Resolve variant config path (same logic as src/config)
+_VARIANT="${1:-default}"
+VARIANT_CONFIG_FILE=""
+if [ "${_VARIANT}" != "default" ]; then
+    if [ -f "${DIST_PATH}/variants/${_VARIANT}/config" ]; then
+        VARIANT_CONFIG_FILE="${DIST_PATH}/variants/${_VARIANT}/config"
+    elif [ -f "${CUSTOM_PI_OS_PATH}/variants/${_VARIANT}/config" ]; then
+        VARIANT_CONFIG_FILE="${CUSTOM_PI_OS_PATH}/variants/${_VARIANT}/config"
+    fi
+fi
+
 if [ -f "${CONFIG_FILE}" ]; then
-    echo "Found a dist config file, checking for BASE_BOARD in config and config.local..."
+    echo "Found a dist config file, checking for BASE_BOARD in config, variant, and config.local..."
     BASE_BOARD_FROM_CONFIG=$(bash -c "source \"$CONFIG_FILE\" >/dev/null 2>&1; \
+        [ -n \"$VARIANT_CONFIG_FILE\" ] && [ -f \"$VARIANT_CONFIG_FILE\" ] && source \"$VARIANT_CONFIG_FILE\" >/dev/null 2>&1; \
         [ -f \"$CONFIG_LOCAL_FILE\" ] && source \"$CONFIG_LOCAL_FILE\" >/dev/null 2>&1; \
         echo \$BASE_BOARD")
     if [ -n "$BASE_BOARD_FROM_CONFIG" ]; then
         export BASE_BOARD="$BASE_BOARD_FROM_CONFIG"
-        echo "BASE_BOARD set to ${BASE_BOARD} from dist config/config.local before generating board config."
+        echo "BASE_BOARD set to ${BASE_BOARD} from dist config/variant/config.local before generating board config."
     else
-        echo "BASE_BOARD not found in ${CONFIG_FILE} or ${CONFIG_LOCAL_FILE}. It will be set from the cli or fallback to raspberrypiarmhf"
+        echo "BASE_BOARD not found in ${CONFIG_FILE}, variant, or ${CONFIG_LOCAL_FILE}. It will be set from the cli or fallback to raspberrypiarmhf"
     fi
 else
     echo "Config file ${CONFIG_FILE} does not exist. You probably want to create one for your distribution."

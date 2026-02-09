@@ -43,26 +43,32 @@ print_test_result() {
 #   $1 - path to dist config file
 #   $2 - path to dist config.local file (or empty)
 #   $3 - path to output script
+#   $4 - path to variant config file (or empty)
 run_build_preseed_flow() {
     local config_file="$1"
     local config_local_file="$2"
     local output_script="$3"
+    local variant_config_file="$4"
 
     # Run in a subshell to avoid polluting the test environment
     (
         # Unset BASE_BOARD to start clean
         unset BASE_BOARD
 
-        # Mimic src/build lines 14-17: source config, then config.local
+        # Mimic src/build pre-seed: config, then variant, then config.local
         if [ -f "${config_file}" ]; then
             source "${config_file}"
+        fi
+        if [ -n "${variant_config_file}" ] && [ -f "${variant_config_file}" ]; then
+            source "${variant_config_file}"
         fi
         if [ -n "${config_local_file}" ] && [ -f "${config_local_file}" ]; then
             source "${config_local_file}"
         fi
 
-        # Mimic the heredoc bash -c check
+        # Mimic the heredoc bash -c check (config < variant < config.local)
         BASE_BOARD_FROM_CONFIG=$(bash -c "source \"${config_file}\" >/dev/null 2>&1; \
+            [ -n \"${variant_config_file}\" ] && [ -f \"${variant_config_file}\" ] && source \"${variant_config_file}\" >/dev/null 2>&1; \
             [ -n \"${config_local_file}\" ] && [ -f \"${config_local_file}\" ] && source \"${config_local_file}\" >/dev/null 2>&1; \
             echo \$BASE_BOARD")
         if [ -n "$BASE_BOARD_FROM_CONFIG" ]; then
@@ -215,15 +221,135 @@ CONF
     rm -rf "${tmpdir}"
 }
 
+# Test 5: Variant sets BASE_BOARD=raspberrypiarm64, no config.local → BASE_ARCH=arm64
+test_variant_sets_arm64() {
+    local test_name="Variant sets BASE_BOARD=raspberrypiarm64, no config.local"
+    print_test_header "$test_name"
+    ((test_count++))
+
+    local tmpdir=$(mktemp -d)
+    local config_file="${tmpdir}/config"
+    local variant_config_file="${tmpdir}/variant_config"
+    local output_script="${tmpdir}/board_config.sh"
+
+    # Dist config does NOT set BASE_BOARD
+    cat > "${config_file}" <<'CONF'
+export SOME_OTHER_VAR="hello"
+CONF
+
+    # Variant config sets arm64 board
+    cat > "${variant_config_file}" <<'CONF'
+export BASE_BOARD=raspberrypiarm64
+CONF
+
+    run_build_preseed_flow "${config_file}" "" "${output_script}" "${variant_config_file}"
+
+    local is_passed=false
+    if [ -f "${output_script}" ] && grep -q 'BASE_ARCH="arm64"' "${output_script}"; then
+        is_passed=true
+        ((tests_passed++))
+    fi
+
+    echo "Generated board config:"
+    [ -f "${output_script}" ] && cat "${output_script}" || echo "(file not created)"
+    print_test_result "$test_name" "$is_passed" "Expected BASE_ARCH=\"arm64\" from variant"
+    $is_passed || failed_tests+=("$test_name")
+
+    rm -rf "${tmpdir}"
+}
+
+# Test 6: config.local overrides variant's BASE_BOARD
+test_config_local_overrides_variant() {
+    local test_name="config.local BASE_BOARD overrides variant BASE_BOARD"
+    print_test_header "$test_name"
+    ((test_count++))
+
+    local tmpdir=$(mktemp -d)
+    local config_file="${tmpdir}/config"
+    local config_local_file="${tmpdir}/config.local"
+    local variant_config_file="${tmpdir}/variant_config"
+    local output_script="${tmpdir}/board_config.sh"
+
+    # Dist config does NOT set BASE_BOARD
+    cat > "${config_file}" <<'CONF'
+export SOME_OTHER_VAR="hello"
+CONF
+
+    # Variant sets armhf
+    cat > "${variant_config_file}" <<'CONF'
+export BASE_BOARD=raspberrypiarmhf
+CONF
+
+    # config.local overrides to arm64
+    cat > "${config_local_file}" <<'CONF'
+export BASE_BOARD=raspberrypiarm64
+CONF
+
+    run_build_preseed_flow "${config_file}" "${config_local_file}" "${output_script}" "${variant_config_file}"
+
+    local is_passed=false
+    if [ -f "${output_script}" ] && grep -q 'BASE_ARCH="arm64"' "${output_script}"; then
+        is_passed=true
+        ((tests_passed++))
+    fi
+
+    echo "Generated board config:"
+    [ -f "${output_script}" ] && cat "${output_script}" || echo "(file not created)"
+    print_test_result "$test_name" "$is_passed" "Expected BASE_ARCH=\"arm64\" (config.local should win over variant)"
+    $is_passed || failed_tests+=("$test_name")
+
+    rm -rf "${tmpdir}"
+}
+
+# Test 7: Variant overrides dist config's BASE_BOARD
+test_variant_overrides_config() {
+    local test_name="Variant BASE_BOARD overrides dist config BASE_BOARD"
+    print_test_header "$test_name"
+    ((test_count++))
+
+    local tmpdir=$(mktemp -d)
+    local config_file="${tmpdir}/config"
+    local variant_config_file="${tmpdir}/variant_config"
+    local output_script="${tmpdir}/board_config.sh"
+
+    # Dist config sets armhf
+    cat > "${config_file}" <<'CONF'
+export BASE_BOARD=raspberrypiarmhf
+CONF
+
+    # Variant overrides to arm64
+    cat > "${variant_config_file}" <<'CONF'
+export BASE_BOARD=raspberrypiarm64
+CONF
+
+    run_build_preseed_flow "${config_file}" "" "${output_script}" "${variant_config_file}"
+
+    local is_passed=false
+    if [ -f "${output_script}" ] && grep -q 'BASE_ARCH="arm64"' "${output_script}"; then
+        is_passed=true
+        ((tests_passed++))
+    fi
+
+    echo "Generated board config:"
+    [ -f "${output_script}" ] && cat "${output_script}" || echo "(file not created)"
+    print_test_result "$test_name" "$is_passed" "Expected BASE_ARCH=\"arm64\" (variant should win over dist config)"
+    $is_passed || failed_tests+=("$test_name")
+
+    rm -rf "${tmpdir}"
+}
+
 # Run all tests
 run_tests() {
-    echo -e "${BLUE}Running config.local BASE_BOARD Tests${NC}"
-    echo "═══════════════════════════════════════"
+    echo -e "${BLUE}Running config.local and Variant BASE_BOARD Tests${NC}"
+    echo "═══════════════════════════════════════════════════"
 
     test_no_config_local_defaults_to_armhf
     test_config_local_sets_arm64
     test_config_local_overrides_config
     test_config_sets_board_no_local
+    test_variant_sets_arm64
+    test_config_local_overrides_variant
+    test_variant_overrides_config
 
     # Print summary
     echo
