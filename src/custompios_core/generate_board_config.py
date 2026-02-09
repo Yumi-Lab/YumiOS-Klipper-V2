@@ -2,9 +2,7 @@
 import os
 import yaml
 from pathlib import Path
-from typing import Tuple, Optional, Dict, Any, cast
-import git
-from git import RemoteProgress
+from typing import Optional, Dict, Any, cast
 from common import get_image_config
 import argparse
 import sys
