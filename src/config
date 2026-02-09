@@ -52,6 +52,13 @@ if [ "${BUILD_VARIANT}" != 'default' ]; then
   fi
 fi
 
+# Import generated board config first (lowest priority, can be overridden by variant and config.local)
+if [ -f "${EXTRA_BAORD_CONFIG}" ]; then
+  source "${EXTRA_BAORD_CONFIG}"
+else
+  echo "Note: Not sourcing board config"
+fi
+
 echo Import the variant config if we have one
 if [ -n "${VARIANT_CONFIG}" ] && [ -f "${VARIANT_CONFIG}" ]
 then
@@ -71,6 +78,9 @@ fi
 
 
 
+# config.local is the highest-priority override — it wins over generated board
+# config, variant config, and flavor config. (It is also pre-seeded in src/build
+# so that generate_board_config.py can see BASE_BOARD early enough.)
 if [ -f "${DIST_PATH}/config.local" ]
 then
   echo "Sourcing distro config.local..."
@@ -87,13 +97,6 @@ MODULES_LIST="${TMP//)/,}"
 [ -n "$BASE_WORKSPACE" ] || BASE_WORKSPACE=${DIST_PATH}/workspace$WORKSPACE_POSTFIX
 # [ -n "$BASE_CHROOT_SCRIPT_PATH" ] || BASE_CHROOT_SCRIPT_PATH=$BASE_SCRIPT_PATH/chroot_script
 [ -n "$BASE_MOUNT_PATH" ] || BASE_MOUNT_PATH=$BASE_WORKSPACE/mount
-
-# Import remote and submodules config
-if [ -f "${EXTRA_BAORD_CONFIG}" ]; then
-  source "${EXTRA_BAORD_CONFIG}"
-else
-  echo "Note: Not sourceing board config"
-fi
 
 export REMOTE_AND_META_CONFIG="$BASE_WORKSPACE"/remote_and_meta_config
 # Remote modules and meta modulese go in first if they want to change standard behaviour

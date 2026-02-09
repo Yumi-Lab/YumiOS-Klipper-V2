@@ -8,10 +8,13 @@ set -x
 
 define(){ IFS='\n' read -r -d '' ${1} || true; }
 
-# Source in dist config to seed generate_board_config.py
-# but will then be overwritten ${CUSTOM_PI_OS_PATH}/config for
-# 'final' configuration
+# Pre-seed: source dist config and config.local to seed generate_board_config.py
+# with BASE_BOARD. The full/authoritative config sourcing happens later via
+# ${CUSTOM_PI_OS_PATH}/config inside the heredoc.
 source ${DIST_PATH}/config
+if [ -f "${DIST_PATH}/config.local" ]; then
+    source "${DIST_PATH}/config.local"
+fi
 
 define SCRIPT <<'EOF'
 BUILD_SCRIPT_PATH=$(dirname $(realpath -s $BASH_SOURCE))
@@ -19,17 +22,21 @@ BUILD_SCRIPT_PATH=$(dirname $(realpath -s $BASH_SOURCE))
 # Config file can override BASE_BOARD from cli
 CONFIG_FILE="${DIST_PATH}"/config
 
+CONFIG_LOCAL_FILE="${DIST_PATH}"/config.local
+
 if [ -f "${CONFIG_FILE}" ]; then
-    echo "Found a dist config file, if BASE_BOARD is set there will source it before generating the extra board config"
-    BASE_BOARD_FROM_CONFIG=$(bash -c "source \"$CONFIG_FILE\" >/dev/null 2>&1; echo \$BASE_BOARD")
+    echo "Found a dist config file, checking for BASE_BOARD in config and config.local..."
+    BASE_BOARD_FROM_CONFIG=$(bash -c "source \"$CONFIG_FILE\" >/dev/null 2>&1; \
+        [ -f \"$CONFIG_LOCAL_FILE\" ] && source \"$CONFIG_LOCAL_FILE\" >/dev/null 2>&1; \
+        echo \$BASE_BOARD")
     if [ -n "$BASE_BOARD_FROM_CONFIG" ]; then
         export BASE_BOARD="$BASE_BOARD_FROM_CONFIG"
-        echo "BASE_BOARD set to ${BASE_BOARD} from ${CONFIG_FILE} before generating board config."
+        echo "BASE_BOARD set to ${BASE_BOARD} from dist config/config.local before generating board config."
     else
-        echo "BASE_BOARD not found in ${CONFIG_FILE}. It will be set from the cli or fallback to raspberrypiarmhf"
+        echo "BASE_BOARD not found in ${CONFIG_FILE} or ${CONFIG_LOCAL_FILE}. It will be set from the cli or fallback to raspberrypiarmhf"
     fi
 else
-    echo "Config file ${CONFIG_FILE} does not exist. You probably want to create one for you distrubtion."
+    echo "Config file ${CONFIG_FILE} does not exist. You probably want to create one for your distribution."
 fi
 
 
