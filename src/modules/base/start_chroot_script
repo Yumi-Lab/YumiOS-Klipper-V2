@@ -174,11 +174,40 @@ then
 
   # Restart ssh
   echo "IPQoS throughput" >> /etc/ssh/ssh_config
-  
-  ### Try and fix https://github.com/guysoft/OctoPi/issues/424
-  if [ -f "/lib/systemd/system/regenerate_ssh_host_keys.service" ]; then
-    sed -i "s@ExecStart=/usr/bin/ssh-keygen -A -v@ExecStart=/bin/bash -c ' /usr/bin/ssh-keygen -A -v >> /var/log/regenerate_ssh_host_keys.log 2>\&1'@g" /lib/systemd/system/regenerate_ssh_host_keys.service
-    sed -i "s@ExecStartPost=/bin/systemctl disable regenerate_ssh_host_keys@ExecStartPost=/bin/bash -c 'for i in /etc/ssh/ssh_host_*_key*; do actualsize=\$(wc -c <\"\$i\") ;if [ \$actualsize -eq 0 ]; then echo size is 0 bytes ; exit 1 ; fi ; done ; /bin/systemctl disable regenerate_ssh_host_keys'@g" /lib/systemd/system/regenerate_ssh_host_keys.service
+
+  ### Fix SSH host key regeneration for QEMU + generic systems
+  ### https://github.com/guysoft/OctoPi/issues/424
+  SSH_KEYGEN_SERVICE="/lib/systemd/system/regenerate_ssh_host_keys.service"
+
+  if [ -f "$SSH_KEYGEN_SERVICE" ]; then
+    # Modify existing service
+    sed -i "s@ExecStart=/usr/bin/ssh-keygen -A -v@ExecStart=/bin/bash -c ' /usr/bin/ssh-keygen -A -v >> /var/log/regenerate_ssh_host_keys.log 2>\&1'@g" "$SSH_KEYGEN_SERVICE"
+    sed -i "s@ExecStartPost=/bin/systemctl disable regenerate_ssh_host_keys@ExecStartPost=/bin/bash -c 'for i in /etc/ssh/ssh_host_*_key*; do actualsize=\$(wc -c <\"\$i\") ;if [ \$actualsize -eq 0 ]; then echo size is 0 bytes ; exit 1 ; fi ; done ; /bin/systemctl disable regenerate_ssh_host_keys'@g" "$SSH_KEYGEN_SERVICE"
+    systemctl enable regenerate_ssh_host_keys.service
+  else
+    # Service doesn't exist (Debian Bullseye, QEMU, etc.) - create it
+    echo_green "Creating SSH host key regeneration service..."
+    mkdir -p /etc/systemd/system/
+    cat > /etc/systemd/system/regenerate_ssh_host_keys.service << 'SSHEOF'
+[Unit]
+Description=Regenerate SSH host keys
+Before=ssh.service
+ConditionPathExistsGlob=!/etc/ssh/ssh_host_*_key
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/ssh-keygen -A -v
+ExecStart=/bin/bash -c 'for i in /etc/ssh/ssh_host_*_key*; do actualsize=$(wc -c <"$i"); if [ $actualsize -eq 0 ]; then echo "SSH key size is 0 bytes"; exit 1; fi; done'
+ExecStartPost=/bin/systemctl disable regenerate_ssh_host_keys.service
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+SSHEOF
+    # Enable the service - create symlink directly (systemctl may not work in chroot)
+    mkdir -p /etc/systemd/system/multi-user.target.wants/
+    ln -sf /etc/systemd/system/regenerate_ssh_host_keys.service /etc/systemd/system/multi-user.target.wants/regenerate_ssh_host_keys.service
+    echo_green "SSH host key regeneration service created and enabled ✓"
   fi
 fi
 
