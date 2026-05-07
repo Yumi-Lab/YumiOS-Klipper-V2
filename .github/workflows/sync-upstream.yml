@@ -1,0 +1,141 @@
+name: Sync Upstream CustomPiOS
+
+# Trigger on schedule (Monday 08:00 UTC) or manual
+on:
+  schedule:
+    - cron: '0 8 * * 1'  # Monday 08:00 UTC
+  workflow_dispatch:
+
+jobs:
+  sync-upstream:
+    runs-on: ubuntu-latest
+    name: Check for CustomPiOS upstream updates
+
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history to detect new commits
+
+      - name: 🔍 Check upstream for new commits
+        id: check_upstream
+        run: |
+          # Store current HEAD before fetching
+          CURRENT_SHA=$(git rev-parse HEAD)
+
+          # Fetch upstream CustomPiOS develop branch
+          echo "Fetching upstream CustomPiOS develop..."
+          git remote add upstream https://github.com/guysoft/CustomPiOS.git 2>/dev/null || true
+          git fetch upstream develop --quiet
+
+          # Compare develop branch (if it exists) with upstream
+          if git show-ref --verify --quiet refs/heads/develop; then
+            DEVELOP_SHA=$(git rev-parse develop)
+            UPSTREAM_SHA=$(git rev-parse upstream/develop)
+
+            if [ "$DEVELOP_SHA" != "$UPSTREAM_SHA" ]; then
+              echo "✓ New commits found upstream"
+              COMMITS=$(git log develop..upstream/develop --oneline | wc -l)
+              echo "commits=$COMMITS" >> $GITHUB_OUTPUT
+              echo "has_updates=true" >> $GITHUB_OUTPUT
+            else
+              echo "No new commits — develop is in sync"
+              echo "has_updates=false" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "develop branch not found locally — checking master branch"
+            MASTER_SHA=$(git rev-parse master 2>/dev/null || echo "")
+            UPSTREAM_SHA=$(git rev-parse upstream/develop)
+
+            if [ -n "$MASTER_SHA" ] && [ "$MASTER_SHA" != "$UPSTREAM_SHA" ]; then
+              echo "✓ New commits found on upstream"
+              COMMITS=$(git log master..upstream/develop --oneline | wc -l)
+              echo "commits=$COMMITS" >> $GITHUB_OUTPUT
+              echo "has_updates=true" >> $GITHUB_OUTPUT
+            else
+              echo "No new commits detected"
+              echo "has_updates=false" >> $GITHUB_OUTPUT
+            fi
+          fi
+
+      - name: 📝 Create or update upstream sync PR
+        if: steps.check_upstream.outputs.has_updates == 'true'
+        id: create_pr
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          COMMITS: ${{ steps.check_upstream.outputs.commits }}
+        run: |
+          # Check if PR already exists
+          PR_NUMBER=$(gh pr list \
+            --repo "${{ github.repository }}" \
+            --head "sync/upstream-custompisos" \
+            --state open \
+            --json number \
+            --jq '.[0].number' 2>/dev/null || echo "")
+
+          if [ -n "$PR_NUMBER" ]; then
+            echo "PR #$PR_NUMBER already exists — updating"
+            # Update description with new commit count
+            gh pr comment "$PR_NUMBER" \
+              --body "🔄 **Upstream sync check** — Found ${COMMITS} new commits from CustomPiOS upstream develop branch" \
+              --repo "${{ github.repository }}" || true
+            echo "pr_number=$PR_NUMBER" >> $GITHUB_OUTPUT
+            echo "pr_action=updated" >> $GITHUB_OUTPUT
+          else
+            echo "Creating new upstream sync PR"
+            # Create new branch and PR
+            git config user.name "github-actions"
+            git config user.email "actions@github.com"
+
+            BRANCH_NAME="sync/upstream-custompisos"
+            git checkout -b "$BRANCH_NAME" 2>/dev/null || git checkout "$BRANCH_NAME"
+
+            # Create commit with details
+            TIMESTAMP=$(date -u +"%Y-%m-%d %H:%M UTC")
+            git commit --allow-empty -m "sync: Pull upstream CustomPiOS updates (${COMMITS} commits)" \
+              -m "Detected ${COMMITS} new commits from guysoft/CustomPiOS#develop" \
+              -m "Sync timestamp: ${TIMESTAMP}" \
+              -m "[sync-upstream] MANUAL REVIEW REQUIRED" || echo "No changes to commit"
+
+            git push origin "$BRANCH_NAME" --force-with-lease 2>/dev/null || true
+
+            # Create PR
+            PR_URL=$(gh pr create \
+              --repo "${{ github.repository }}" \
+              --head "$BRANCH_NAME" \
+              --base "yumi-stable" \
+              --title "[sync-upstream] CustomPiOS updates — MANUAL REVIEW REQUIRED" \
+              --body "### Upstream Sync Detected
+
+Found **${COMMITS} new commits** from [guysoft/CustomPiOS](https://github.com/guysoft/CustomPiOS) \`develop\` branch.
+
+**⚠️ MANUAL REVIEW REQUIRED**
+- Review commits: https://github.com/guysoft/CustomPiOS/compare/...
+- Test locally before merge
+- Merge to \`yumi-stable\` only if validated
+
+**Workflow**:
+1. Review commits
+2. Test build locally
+3. Merge to \`yumi-stable\` if OK
+4. Auto-sync master from yumi-stable after
+
+---
+*Generated by sync-upstream.yml workflow*" \
+              --label "upstream-sync" \
+              --draft 2>/dev/null || echo "")
+
+            if [ -n "$PR_URL" ]; then
+              echo "✓ PR created: $PR_URL"
+              echo "pr_action=created" >> $GITHUB_OUTPUT
+            fi
+          fi
+
+      - name: ✓ Sync check complete
+        if: steps.check_upstream.outputs.has_updates == 'false'
+        run: |
+          echo "✓ Repository is in sync with upstream — no action needed"
