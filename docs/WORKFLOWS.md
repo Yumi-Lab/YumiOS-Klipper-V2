@@ -10,6 +10,7 @@ This document describes the CI/CD workflows that validate and maintain YumiOS-Kl
 | **Build Validation** | `build.yml` | Push (develop, yumi-stable, protocol/*) + PR | Structure + syntax validation |
 | **Tests** | `tests.yaml` | Push to any branch + tags | Run shell script test suite |
 | **Docker Build** | `docker-build.yml` | Push (master, devel, release/v1, beta) + tags | Build Docker images → push to GHCR |
+| **CustomPiOS Build** | `custompios-build.yml` | Manual (`workflow_dispatch`) + tag push | Build YumiOS images (armv7, aarch64) |
 
 ---
 
@@ -136,6 +137,111 @@ Runs 2 jobs (in parallel):
 ### Status
 - Requires Docker credentials (handled via `GITHUB_TOKEN`)
 - **Phase 3** will integrate this with hardware validation
+
+---
+
+## CustomPiOS Build Workflow
+
+### File
+`.github/workflows/custompios-build.yml`
+
+### Trigger
+- **Manual**: Via GitHub Actions UI (`workflow_dispatch`)
+  - Optional input: Select board (all, armv7, aarch64)
+- **Automatic**: On tag push (e.g., `git tag v2.0.0 && git push --tags`)
+
+### What It Does
+Builds YumiOS images for multiple architectures using CustomPiOS Docker container.
+
+#### Job 1: build-matrix-setup
+- Prepares build matrix based on input (all boards or specific board)
+- Outputs: `raspberrypiarmhf` (armv7), `raspberry4-64` (aarch64)
+
+#### Job 2: build-yumios (matrix job)
+For each board architecture:
+- ✓ Load build environment (src/.env.build)
+- ✓ Pull CustomPiOS Docker image from GHCR
+- ✓ Build YumiOS image with CustomPiOS
+- ✓ Generate output filename (yumios-klipper-v2-armv7, yumios-klipper-v2-aarch64)
+- ✓ Upload .zip artifact to GitHub Actions
+- ⚠️ **Phase 4A**: Placeholder build (actual Docker build in Phase 4B)
+
+#### Job 3: generate-checksums
+- Downloads all build artifacts
+- Generates SHA256 checksums (ARTIFACTS.sha256)
+- Uploads checksums for verification
+
+#### Job 4: build-summary
+- Displays final status and artifact locations
+- Lists next steps (verification, QEMU testing, release publishing)
+
+### Manual Trigger (Phase 4B)
+
+**Via GitHub UI:**
+```
+1. Go to Actions → CustomPiOS Build
+2. Click "Run workflow"
+3. Select board (default: all)
+4. Click "Run workflow"
+```
+
+**Via gh CLI:**
+```bash
+gh workflow run custompios-build.yml -f board=all
+```
+
+**Or specific architecture:**
+```bash
+gh workflow run custompios-build.yml -f board=armv7
+gh workflow run custompios-build.yml -f board=aarch64
+```
+
+### Output & Artifacts
+
+Build artifacts are uploaded to GitHub Actions workflow run:
+- `yumios-klipper-v2-armv7.zip` — armv7 image (Raspberry Pi 3/4 32-bit)
+- `yumios-klipper-v2-aarch64.zip` — aarch64 image (Raspberry Pi 4B+ 64-bit)
+- `ARTIFACTS.sha256` — checksums for verification
+
+**Download artifacts:**
+```bash
+# List recent runs
+gh run list --workflow custompios-build.yml
+
+# Download artifacts from latest run
+gh run download -D /tmp/yumios
+```
+
+### Verification
+
+**Verify checksums:**
+```bash
+cd /tmp/yumios/checksums
+sha256sum -c ARTIFACTS.sha256
+```
+
+### Exit Codes
+- **0 (SUCCESS)**: All images built, checksums generated → ready for Phase 4C
+- **1 (FAILURE)**: Build error or missing dependencies → check logs
+- **warnings**: Logged but don't block (informational)
+
+### Expected Duration
+- **Phase 4A (dry-run)**: < 5 min (validation only)
+- **Phase 4B (full build)**: 30-45 min per architecture
+
+### Common Issues
+
+**❌ "CustomPiOS image not found"**
+→ Ensure `ghcr.io/<owner>/custompios:latest` exists
+→ Check docker-build.yml has pushed image to GHCR
+
+**❌ "Build timeout (120 minutes)"**
+→ Docker build took >2 hours — check logs for stuck processes
+→ May indicate missing dependencies in CustomPiOS Dockerfile
+
+**❌ "Out of disk space"**
+→ Docker builds consume ~10GB per image
+→ Ensure runner has sufficient disk (GitHub-hosted has ~14GB free)
 
 ---
 
