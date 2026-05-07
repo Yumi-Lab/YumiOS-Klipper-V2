@@ -127,13 +127,24 @@ main() {
 
   log_info "Detected architecture: $ARCH"
 
+  # Set machine type and memory based on architecture
+  if [[ "$ARCH" == "armv7" ]]; then
+    MACHINE="virt"
+    RAM="1G"
+  else
+    MACHINE="virt"
+    RAM="1G"
+  fi
+
   # Start QEMU in background with SSH port forwarding
   $QEMU_CMD \
-    -m 512M \
+    -machine "$MACHINE" \
+    -m "$RAM" \
     -nographic \
-    -drive "file=$IMAGE_PATH,format=raw" \
+    -drive "file=$IMAGE_PATH,format=raw,media=disk" \
     -netdev "user,id=net0,hostfwd=tcp:127.0.0.1:${PORT_SSH}-:22,hostfwd=tcp:127.0.0.1:${PORT_API}-:7125" \
-    -device "virtio-net-device,netdev=net0" &
+    -device "virtio-net-device,netdev=net0" \
+    -enable-kvm 2>/dev/null || true &
   QEMU_PID=$!
   log_success "QEMU started (PID: $QEMU_PID)"
   echo ""
