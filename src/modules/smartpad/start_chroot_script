@@ -1,0 +1,229 @@
+#!/usr/bin/env bash
+#### Smartpad Specific Tweaks for armbian images
+####
+#### Written by Stephan Wendel aka KwadFan <me@stephanwe.de>
+#### Copyright 2023 - till today
+#### https://github.com/KwadFan
+####
+#### This File is distributed under GPLv3
+####
+
+# shellcheck enable=require-variable-braces
+# Source error handling, leave this in place
+set -Ee
+
+# Source CustomPIOS common.sh
+# shellcheck disable=SC1091
+source /common.sh
+install_cleanup_trap
+
+### Helper func
+is_board_type() {
+    local board releasefile
+    board=""
+    releasefile="/etc/armbian-release"
+    if [[ -f "${releasefile}" ]]; then
+        board="$(grep "BOARD=" "${releasefile}" | cut -d'=' -f2)"
+    fi
+    echo "${board}"
+}
+[[ -n "${BASE_USER}" ]] || BASE_USER="pi"  # Replace "pi" with the main user if needed
+#[[ -n "$BASE_USER" ]] || BASE_USER="pi"  # Replace "pi" with the main user if needed
+
+if ! command -v git &>/dev/null; then
+    echo "Git is not installed, please install it before continuing."
+    exit 1
+fi
+
+
+echo_green "Apply SmartPad specific patches..."
+unpack /filesystem/root /
+if [[ -f /etc/X11/xorg.conf.d/03-smartpad-rotate-touch.conf ]]; then
+    rm -fv /etc/X11/xorg.conf.d/03-smartpad-rotate-touch.conf
+fi
+
+echo_green "Apply SmartPad specific patches... [DONE]"
+
+
+### Enable Serial and SPI connections by default
+if [[ "$(is_board_type)" == "smartpad" ]]; then
+    echo_green "Enable Serial and SPI interface on SmartPad..."
+    echo "overlays=spi-spidev uart1 uart2" >> "${SMARTPAD_CONFIG_TXT_FILE}"
+    echo "param_spidev_spi_bus=1" >> "${SMARTPAD_CONFIG_TXT_FILE}"
+    echo_green "Enable Serial and SPI interface on SmartPad... DONE!"
+fi
+
+### Install plymouth theme and install yumi Plymouth repository
+echo_green "Install Yumi Lab Plymouth theme on SmartPad..."
+
+smartpad_install_theme() {
+    local src dest
+    dest="/usr/share/plymouth/themes/"
+    src="/home/${BASE_USER}/$(basename "${SMARTPAD_PLYMOUTH_REPO/.git/}")"
+    src="${src}/pack_2/hexagon_alt"
+    if [[ -d "${src}" ]]; then
+        sudo cp -vr "${src}" "${dest}"
+    fi
+    echo_green "Set default theme to ${SMARTPAD_PLYMOUTH_THEME} ..."
+    sudo plymouth-set-default-theme "${SMARTPAD_PLYMOUTH_THEME}"
+
+    if [[ -d "${src}" ]]; then
+    echo "Cloning successful and theme available for installation."
+else
+    echo "Error: Plymouth theme not found after cloning."
+    exit 1
+fi
+
+}
+
+pushd "/home/${BASE_USER}" &>/dev/null
+sudo -u "${BASE_USER}" git clone "${SMARTPAD_PLYMOUTH_REPO}"
+smartpad_install_theme
+popd &>/dev/null
+
+echo_green "Install Yumi Lab Plymouth theme on SmartPad... [DONE]"
+
+ echo_green "Install YUMI_SYNC ..."
+ pushd "/home/${BASE_USER}" &>/dev/null
+ sudo -u "${BASE_USER}" git clone https://github.com/Yumi-Lab/YUMI_SYNC.git
+ cd YUMI_SYNC
+ sudo make install
+if [[ ! -x "$(command -v YUMI_SYNC)" ]]; then
+    echo "Error: YUMI_SYNC was not installed correctly."
+#    exit 1
+fi
+# Allow Git to manipulate this folder
+git config --global --add safe.directory /home/pi/YUMI_SYNC
+
+# Git cleanup (must be done in the repository)
+if [ -d ".git" ]; then
+    git reset --hard HEAD
+else
+    echo "⚠️  No .git folder found, skipping reset."
+fi
+ cd ..
+ popd &>/dev/null
+sudo chown -R pi:pi /home/pi/YUMI_SYNC
+sudo chmod -R u+rw /home/pi/YUMI_SYNC
+echo_green "Install YUMI_SYNC ... [DONE]"
+
+echo_green "Install moonraker-yumi-lab ..."
+pushd "/home/${BASE_USER}" &>/dev/null
+unpack /filesystem/home/"${BASE_USER}" /home/"${BASE_USER}" "${BASE_USER}"
+sudo -u "${BASE_USER}" git clone https://github.com/Yumi-Lab/moonraker-yumi-lab.git
+cd moonraker-yumi-lab
+chmod +x ./install.sh
+sudo -u "${BASE_USER}" ./install.sh -C "/home/pi/printer_data/config/moonraker.conf"\
+    -p 7125 -H 127.0.0.1 -l /home/pi/printer_data/logs \
+    -L -S "https://app.yumi-lab.com"
+cd ..
+popd &>/dev/null
+echo_green "Install moonraker-yumi-lab ... [DONE]"
+
+echo_green "Install KlipperScreen preconfiguration..."
+#unpack /filesystem/home/"${BASE_USER}" /home/"${BASE_USER}" "${BASE_USER}"
+
+echo_green "Disable KlipperScreen for first boot service..."
+systemctl_if_exists disable KlipperScreen.service
+
+echo_green "Enable first boot service..."
+sudo chmod +x /usr/local/bin/firstboot
+systemctl_if_exists enable firstboot.service
+
+echo_green "Install yumi-config smartpad_generic ..."
+pushd "/home/${BASE_USER}" &>/dev/null
+sudo -u "${BASE_USER}" git clone https://github.com/Yumi-Lab/yumi-config.git
+cd yumi-config
+chmod +x ./install.sh
+./install.sh
+cd ..
+popd &>/dev/null
+echo_green "Install yumi-config smartpad_generic ... [DONE]"
+
+echo_green "Install YUMI_PLR ..."
+pushd "/home/${BASE_USER}" &>/dev/null
+sudo -u "${BASE_USER}" git clone https://github.com/Yumi-Lab/YUMI_PLR.git
+cd YUMI_PLR
+chmod +x ./install.sh
+./install.sh
+cd ..
+# For YUMI_PLR
+if [[ ! -d "/home/${BASE_USER}/YUMI_PLR" ]]; then
+    echo "Error: YUMI_PLR was not installed correctly."
+    exit 1
+fi
+popd &>/dev/null
+echo_green "Install YUMI_PLR ... [DONE]"
+
+echo_green "ACL printer_data ..."
+sudo chmod 777 -R /home/pi/printer_data/
+echo_green "ACL printer_data ... [DONE]"
+
+echo_green "Cam FIX ..."
+# This script dynamically detects the first connected webcam and creates a symlink /dev/webcam
+
+SCRIPT_PATH="/usr/local/bin/fix-webcam.sh"
+SERVICE_PATH="/etc/systemd/system/fix-webcam.service"
+
+# 1. Create the fix-webcam.sh script
+cat << 'EOF' | sudo tee ${SCRIPT_PATH} > /dev/null
+#!/bin/bash
+
+# Wait for the system to finish detecting devices
+sleep 3
+
+# Remove the old symlink if it exists
+[ -L /dev/webcam ] && rm -f /dev/webcam
+
+# Find the first available video device
+for dev in /dev/video*; do
+    if v4l2-ctl --device="$dev" --all &>/dev/null; then
+        ln -s "$dev" /dev/webcam
+        echo "✅ Webcam found: $dev => /dev/webcam"
+        exit 0
+    fi
+done
+
+echo "❌ No valid webcam found."
+exit 1
+EOF
+
+# Make executable
+sudo chmod +x ${SCRIPT_PATH}
+
+# 2. Create the systemd service
+cat << EOF | sudo tee ${SERVICE_PATH} > /dev/null
+[Unit]
+Description=Fix Webcam Symlink
+After=multi-user.target
+
+[Service]
+Type=oneshot
+ExecStart=${SCRIPT_PATH}
+RemainAfterExit=true
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# 3. Enable the service
+sudo systemctl daemon-reload
+sudo systemctl enable fix-webcam.service
+
+# 4. Final message
+echo "✅ fix-webcam service installed and enabled successfully."
+echo "It will automatically create /dev/webcam on next boot."
+echo "Point to it in Crowsnest: device: /dev/webcam"
+echo_green "Cam FIX ... [DONE]"
+
+echo_green "Moonraker services managed ..."
+
+FILE="/home/pi/printer_data/moonraker.asvc"
+SERVICES=("KlipperScreen" "YUMI_SYNC" "crowsnest" "sonar")
+
+for SERVICE in "${SERVICES[@]}"; do
+     grep -qxF "${SERVICE}" "${FILE}" || echo "${SERVICE}" >> "${FILE}"
+done
+cat /home/pi/printer_data/moonraker.asvc
+
+echo_green "Moonraker services managed ... [DONE]"

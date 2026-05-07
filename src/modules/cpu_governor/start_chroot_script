@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+#### CPU Governor — fix frequency at 912MHz for Klipper stability
+####
+#### Sets CPU governor to 'userspace' at fixed 912MHz on all cores.
+#### Dynamic frequency scaling causes Klipper USB/MCU disconnections.
+####
+
+# shellcheck enable=require-variable-braces
+# shellcheck disable=SC1091
+source /common.sh
+install_cleanup_trap
+
+echo_green "Setting CPU governor to userspace at 912MHz..."
+
+cat << 'EOF' > /usr/local/bin/set_cpu_freq.sh
+#!/bin/bash
+for CPU in /sys/devices/system/cpu/cpu*/cpufreq; do
+    echo userspace > "${CPU}/scaling_governor"
+    echo 912000 > "${CPU}/scaling_setspeed"
+done
+EOF
+
+chmod +x /usr/local/bin/set_cpu_freq.sh
+
+cat << 'EOF' > /etc/systemd/system/set-cpu-freq.service
+[Unit]
+Description=Set CPU governor to userspace at 912MHz (Klipper stability)
+After=sysinit.target
+Before=klipper.service moonraker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/set_cpu_freq.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+systemctl daemon-reload
+systemctl enable set-cpu-freq.service
+
+echo_green "CPU governor set to userspace at 912MHz ... [DONE]"
