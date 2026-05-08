@@ -1,107 +1,82 @@
-CONFIG_DIR=$(dirname $(realpath -s "${BASH_SOURCE}"))
-source ${CUSTOM_PI_OS_PATH}/common.sh
+#!/usr/bin/env bash
+# YumiOS-Klipper-V2 — Project config (vanilla CustomPiOS)
+# This file is sourced by build_dist. Keep it self-contained.
+# shellcheck enable=require-variable-braces
 
-WORKSPACE_POSTFIX=
+get_version() {
+    local ver
+    ver="$(realpath "$( dirname -- "${BASH_SOURCE[0]}")"/version)"
+    if [ -f "${ver}" ]; then
+        cat "${ver}"
+        return
+    fi
+    echo "unknown"
+}
 
-export BUILD_VARIANT=""
-BUILD_VARIANT="$1"
-: ${BUILD_VARIANT:=default}
+get_img_name() {
+    local -a types
+    types=(zip 7z xz)
+    if [ -n "${DIST_PATH}" ]; then
+        for i in "${types[@]}"; do
+            find "${DIST_PATH}/image/" -type f -name "*.${i}" -printf "%p\n"
+        done
+    fi
+    if [ -z "${DIST_PATH}" ]; then
+        echo ""
+    fi
+}
 
-EXTRA_BAORD_CONFIG=$2
+DIST_VERSION="$(get_version)"
+BASE_ZIP_IMG="$(get_img_name)"
+DIST_NAME="YumiOS"
 
-export BUILD_FLAVOR=""
-# Disable flavor system
-#BUILD_FLAVOR="$1"
-: ${BUILD_FLAVOR:=default}
+export DIST_NAME
+export DIST_VERSION
+export BASE_ZIP_IMG
 
-echo -e "--> Building VARIANT $BUILD_VARIANT, FLAVOR $BUILD_FLAVOR"
+# Base User
+BASE_ADD_USER="yes"
+BASE_USER="pi"
+BASE_USER_PASSWORD="yumi"
 
-# Import the local config if we have one
+# Needed while building for non rpi sbc
+BASE_DISTRO="armbian"
+BASE_IMAGE_RASPBIAN="no"
 
-if [ -f "${CONFIG_DIR}/config.local" ]
-then
-  echo "Sourcing config.local..."
-  source "${CONFIG_DIR}/config.local"
-fi
+# partition resizing
+BASE_ROOT_PARTITION="2"
+BASE_IMAGE_ENLARGEROOT=6000
+BASE_IMAGE_RESIZEROOT=600
+BASE_BOOT_MOUNT_PATH="/boot/"
+BASE_RELEASE_COMPRESS=no
 
-source ${DIST_PATH}/config
+# Architecture
+BASE_ARCH="armhf"
 
-if [ "${BUILD_VARIANT}" != 'default' ]; then
-  WORKSPACE_POSTFIX="-${BUILD_VARIANT}"
-  
-  if [ -d "${DIST_PATH}/variants/${BUILD_VARIANT}" ]; then
-    export VARIANT_BASE="${DIST_PATH}/variants/${BUILD_VARIANT}"
-  elif [ -d "${CUSTOM_PI_OS_PATH}/variants/${BUILD_VARIANT}" ]; then
-    export VARIANT_BASE="${CUSTOM_PI_OS_PATH}/variants/${BUILD_VARIANT}"
-  else
-    die "Could not find Variant ${BUILD_VARIANT}"
-  fi
+# OS naming
+BASE_OS_CODENAME="bookworm"
+BASE_OS_VERSION="debian12"
 
-  if [ "${BUILD_FLAVOR}" = '' ] || [ "${BUILD_FLAVOR}" = 'default' ]
-  then
-    VARIANT_CONFIG=${VARIANT_BASE}/config
-    FLAVOR_CONFIG=
-  else
-    VARIANT_CONFIG=${VARIANT_BASE}/config
-    FLAVOR_CONFIG=${VARIANT_BASE}/config.${BUILD_FLAVOR}
-  fi
+# Image base (SmartPi-armbian)
+DOWNLOAD_URL_CHECKSUM="https://github.com/Yumi-Lab/SmartPi-armbian/releases/download/v1.7.0/Yumi-smartpi1-bookworm-debian12-server-2026-04-23-0753.img.xz.sha256"
+DOWNLOAD_URL_IMAGE="https://github.com/Yumi-Lab/SmartPi-armbian/releases/download/v1.7.0/Yumi-smartpi1-bookworm-debian12-server-2026-04-23-0753.img.xz"
 
-  if [ -n "${FLAVOR_CONFIG}" ] && [ ! -f "${FLAVOR_CONFIG}" ]
-  then
-    die "Could not find config file ${FLAVOR_CONFIG}"
-  fi
-fi
+# Modules — YumiOS Klipper stack for SmartPi One
+MODULES="base(udev_fix,armbian(armbian_net,yumios,klipper,is_req_preinstall,moonraker,mainsail,timelapse,klipperscreen,crowsnest,usb-automount,cpu_governor,mcu-rpi,tmc-autotune))"
 
-# Import generated board config first (lowest priority, can be overridden by variant and config.local)
-if [ -f "${EXTRA_BAORD_CONFIG}" ]; then
-  source "${EXTRA_BAORD_CONFIG}"
-else
-  echo "Note: Not sourcing board config"
-fi
-
-echo Import the variant config if we have one
-if [ -n "${VARIANT_CONFIG}" ] && [ -f "${VARIANT_CONFIG}" ]
-then
-  echo "Sourcing variant config ${VARIANT_CONFIG}..."
-  set -a
-  source "${VARIANT_CONFIG}"
-  set +a
-fi
-
-# Import the flavor config if we have one
-
-if [ -n "${FLAVOR_CONFIG}" ] && [ -f "${FLAVOR_CONFIG}" ]
-then
-  echo "Sourcing flavor config ${FLAVOR_CONFIG}..."
-  source "${FLAVOR_CONFIG}"
-fi
-
-
-
-# config.local is the highest-priority override — it wins over generated board
-# config, variant config, and flavor config. (It is also pre-seeded in src/build
-# so that generate_board_config.py can see BASE_BOARD early enough.)
-if [ -f "${DIST_PATH}/config.local" ]
-then
-  echo "Sourcing distro config.local..."
-  source "${DIST_PATH}/config.local"
-fi
-
-# Get only a list
-TMP="${MODULES//(/,}"
-TMP="${TMP// /}"
-MODULES_LIST="${TMP//)/,}"
-
-
-# Base workspace is special, it has to be sourced before the base module, so remote modules could be calcualted
-[ -n "$BASE_WORKSPACE" ] || BASE_WORKSPACE=${DIST_PATH}/workspace$WORKSPACE_POSTFIX
-# [ -n "$BASE_CHROOT_SCRIPT_PATH" ] || BASE_CHROOT_SCRIPT_PATH=$BASE_SCRIPT_PATH/chroot_script
-[ -n "$BASE_MOUNT_PATH" ] || BASE_MOUNT_PATH=$BASE_WORKSPACE/mount
-
-export REMOTE_AND_META_CONFIG="$BASE_WORKSPACE"/remote_and_meta_config
-# Remote modules and meta modulese go in first if they want to change standard behaviour
-if [ -f "${REMOTE_AND_META_CONFIG}" ]; then
-  source "${REMOTE_AND_META_CONFIG}"
-fi
-
-load_module_config "${MODULES_LIST}"
+export BASE_ADD_USER
+export BASE_USER
+export BASE_USER_PASSWORD
+export BASE_DISTRO
+export BASE_IMAGE_RASPBIAN
+export BASE_ROOT_PARTITION
+export BASE_IMAGE_ENLARGEROOT
+export BASE_IMAGE_RESIZEROOT
+export BASE_BOOT_MOUNT_PATH
+export BASE_RELEASE_COMPRESS
+export BASE_ARCH
+export BASE_OS_CODENAME
+export BASE_OS_VERSION
+export DOWNLOAD_URL_CHECKSUM
+export DOWNLOAD_URL_IMAGE
+export MODULES
