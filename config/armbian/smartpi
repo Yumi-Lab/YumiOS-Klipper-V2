@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# YumiOS-Klipper-V2 — SmartPi ONE (armv7)
+# shellcheck enable=require-variable-braces
+# shellcheck disable=SC2034
+
+# Image base (SmartPi-armbian)
+DOWNLOAD_URL_CHECKSUM="https://github.com/Yumi-Lab/SmartPi-armbian/releases/download/v1.7.0/Yumi-smartpi1-bookworm-debian12-server-2026-04-23-0753.img.xz.sha256"
+DOWNLOAD_URL_IMAGE="https://github.com/Yumi-Lab/SmartPi-armbian/releases/download/v1.7.0/Yumi-smartpi1-bookworm-debian12-server-2026-04-23-0753.img.xz"
+
+# Disk size (MB)
+BASE_IMAGE_ENLARGEROOT=6000
+
+# Modules — fork-locked Klipper stack
+MODULES="base(udev_fix,armbian(armbian_net,klipper,moonraker,klipperscreen,crowsnest,usb-automount,cpu_governor,mcu-rpi,tmc-autotune))"
+
+export BASE_ARCH
+export DOWNLOAD_URL_CHECKSUM
+export DOWNLOAD_URL_IMAGE
