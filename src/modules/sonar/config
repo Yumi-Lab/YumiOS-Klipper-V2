@@ -11,7 +11,7 @@
 
 # sonar repo
 [[ -n "$SONAR_REPO_SHIP" ]] || SONAR_REPO_SHIP=https://github.com/Yumi-Lab/sonar.git
-[[ -n "$SONAR_REPO_BRANCH" ]] || SONAR_REPO_BRANCH=yumi-stable
+[[ -n "$SONAR_REPO_BRANCH" ]] || SONAR_REPO_BRANCH=master
 
 # sonar setup
 [[ -n "$SONAR_DEFAULT_CONF" ]] || SONAR_DEFAULT_CONF="resources/sonar.conf"

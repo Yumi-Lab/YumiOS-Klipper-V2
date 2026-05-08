@@ -11,7 +11,7 @@
 
 # crowsnest repo
 [[ -n "$CROWSNEST_REPO_SHIP" ]] || CROWSNEST_REPO_SHIP="https://github.com/Yumi-Lab/crowsnest.git"
-[[ -n "$CROWSNEST_REPO_BRANCH" ]] || CROWSNEST_REPO_BRANCH="yumi-stable"
+[[ -n "$CROWSNEST_REPO_BRANCH" ]] || CROWSNEST_REPO_BRANCH="master"
 
 # crowsnest setup
 [[ -n "$CROWSNEST_DEFAULT_CONF" ]] || CROWSNEST_DEFAULT_CONF="resources/crowsnest.conf"
@@ -24,11 +24,11 @@
 
 # ustreamer
 [[ -n "$CROWSNEST_USTREAMER_REPO_SHIP" ]] || CROWSNEST_USTREAMER_REPO_SHIP="https://github.com/Yumi-Lab/ustreamer.git"
-[[ -n "$CROWSNEST_USTREAMER_REPO_BRANCH" ]] || CROWSNEST_USTREAMER_REPO_BRANCH="yumi-stable"
+[[ -n "$CROWSNEST_USTREAMER_REPO_BRANCH" ]] || CROWSNEST_USTREAMER_REPO_BRANCH="master"
 
 # camera-streamer
 [[ -n "$CROWSNEST_CAMERA_STREAMER_REPO_SHIP" ]] || CROWSNEST_CAMERA_STREAMER_REPO_SHIP="https://github.com/Yumi-Lab/camera-streamer.git"
-[[ -n "$CROWSNEST_CAMERA_STREAMER_REPO_BRANCH" ]] || CROWSNEST_CAMERA_STREAMER_REPO_BRANCH="yumi-stable"
+[[ -n "$CROWSNEST_CAMERA_STREAMER_REPO_BRANCH" ]] || CROWSNEST_CAMERA_STREAMER_REPO_BRANCH="master"
 
 ###########################################################################
 ### DO NOT EDIT BELOW THIS LINE, UNLESS YOU KNOW EXACTLY WHAT HAPPENDS! ###

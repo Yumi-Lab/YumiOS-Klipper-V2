@@ -17,5 +17,5 @@
 [ -n "$TIMELAPSE_TEMPLATE" ] || TIMELAPSE_TEMPLATE="/home/${BASE_USER}/timelapse_template.txt"
 
 [ -n "$TIMELAPSE_REPO_SHIP" ] || TIMELAPSE_REPO_SHIP=https://github.com/Yumi-Lab/moonraker-timelapse.git
-[ -n "$TIMELAPSE_REPO_BRANCH" ] || TIMELAPSE_REPO_BRANCH=yumi-stable
+[ -n "$TIMELAPSE_REPO_BRANCH" ] || TIMELAPSE_REPO_BRANCH=master
 [ -n "$TIMELAPSE_DEPS" ] || TIMELAPSE_DEPS="ffmpeg"
