@@ -25,7 +25,7 @@ install_cleanup_trap
 # pip install for Moonraker
 apt-get install -y python3-pip python3.11-venv python3-virtualenv python3-dev \
 libopenjp2-7 python3-libgpiod curl libcurl4-openssl-dev libssl-dev liblmdb-dev \
-libsodium-dev zlib1g-dev libjpeg-dev packagekit wireless-tools
+libsodium-dev zlib1g-dev libjpeg-dev packagekit wireless-tools python3-pil
 
 # Module only Variables
 MN_BUILD_PACKAGE_FILE="/tmp/mn_packages.lst"
