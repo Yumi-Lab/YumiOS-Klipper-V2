@@ -72,9 +72,21 @@ jobs:
         if: always()
         shell: bash
         run: |
-          source repository/src/config
+          IFS='/' read -r -a array <<< "${{ matrix.config }}"
+          TYPE=${array[0]}
+          SBC=${array[1]}
+
+          # Source project configs directly (do NOT source src/config which is CustomPiOS internal)
+          source repository/config/default
+          if [[ -f "repository/config/${TYPE}/default" ]]; then
+            source repository/config/${TYPE}/default
+          fi
+          if [[ -f "repository/config/${TYPE}/${SBC}" ]]; then
+            source repository/config/${TYPE}/${SBC}
+          fi
+
           NOW="$(date +"%Y-%m-%d-%H%M")"
-          IMAGE="${DIST_NAME}-${DIST_VERSION}-${{ steps.build.outputs.sbc }}-${BASE_OS_CODENAME}-${BASE_OS_VERSION}-${NOW}"
+          IMAGE="${DIST_NAME}-${DIST_VERSION}-${SBC}-${BASE_OS_CODENAME}-${BASE_OS_VERSION}-${NOW}"
 
           sudo mv repository/src/workspace/*.img $IMAGE.img
 
