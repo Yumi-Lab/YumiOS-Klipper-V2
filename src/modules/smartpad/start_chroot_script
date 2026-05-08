@@ -207,8 +207,8 @@ WantedBy=multi-user.target
 EOF
 
 # 3. Enable the service
-sudo systemctl daemon-reload
-sudo systemctl enable fix-webcam.service
+mkdir -p /etc/systemd/system/multi-user.target.wants/
+ln -sf /etc/systemd/system/fix-webcam.service /etc/systemd/system/multi-user.target.wants/fix-webcam.service
 
 # 4. Final message
 echo "✅ fix-webcam service installed and enabled successfully."

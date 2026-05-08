@@ -22,8 +22,9 @@ install_cleanup_trap
 echo_green "Install MCU RPI..."
 #make service
 cd /home/pi/klipper/
-sudo cp /home/pi/klipper/scripts/klipper-mcu.service /etc/systemd/system/
-sudo systemctl enable klipper-mcu.service
+cp /home/pi/klipper/scripts/klipper-mcu.service /etc/systemd/system/
+mkdir -p /etc/systemd/system/multi-user.target.wants/
+ln -sf /etc/systemd/system/klipper-mcu.service /etc/systemd/system/multi-user.target.wants/klipper-mcu.service
 
 
 
@@ -31,7 +32,7 @@ sudo systemctl enable klipper-mcu.service
 echo "Installing micro-controller code to /usr/local/bin/"
 rm -f /usr/local/bin/klipper_mcu
 cp /home/pi/yumi-config/mcu_linux/smart-pi-one//klipper.elf /usr/local/bin/klipper_mcu
-sudo chmod 777 /usr/local/bin/klipper_mcu
+chmod 777 /usr/local/bin/klipper_mcu
 
 
 # Restart (if system install script present)

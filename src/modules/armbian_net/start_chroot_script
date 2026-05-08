@@ -35,7 +35,7 @@ check_install_pkgs ${ARMBIAN_NET_DEPS}
 
 ## Step 2: remove original template
 if [[ -f "${ARMBIAN_NET_FIRSTRUN_FILE}" ]]; then
-    sudo rm -rf "${ARMBIAN_NET_FIRSTRUN_FILE}"
+    rm -rf "${ARMBIAN_NET_FIRSTRUN_FILE}"
 fi
 ## END
 
@@ -45,7 +45,7 @@ systemctl_if_exists disable armbian-firstrun-config.service
 
 ## Step 4: Copy original script to /usr/local/bin/network-configurator
 if [[ -f "${ARMBIAN_NET_FIRSTRUN_SCRIPT}" ]]; then
-    sudo cp -p "${ARMBIAN_NET_FIRSTRUN_SCRIPT}" "${ARMBIAN_NET_NC_PATH}"
+    cp -p "${ARMBIAN_NET_FIRSTRUN_SCRIPT}" "${ARMBIAN_NET_NC_PATH}"
 fi
 ## END
 

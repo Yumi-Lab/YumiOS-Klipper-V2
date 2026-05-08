@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - "develop"
+      - "master"
     paths:
       - "src/modules/**"
       - "src/build_dist"
@@ -25,13 +26,11 @@ on:
 
 # Allow to stop obsolete workflows
 concurrency:
-  #group: ci-buildtrain-${{ github.ref }}-1
   group: ci-build-${{ github.ref }}-1
   cancel-in-progress: true
 
 jobs:
   setup:
-    #runs-on: ubuntu-latest
     runs-on: ubuntu-22.04-arm
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
@@ -49,7 +48,6 @@ jobs:
 
   build:
     needs: setup
-    #runs-on: ubuntu-latest
     runs-on: ubuntu-22.04-arm
     strategy:
       fail-fast: false
@@ -75,10 +73,10 @@ jobs:
         shell: bash
         run: |
           source repository/src/config
-          NOW="$(date +"%Y-%m-%d")"
-          IMAGE="${NOW}-${DIST_NAME}-${DIST_VERSION}-${{ steps.build.outputs.type }}-${{ steps.build.outputs.sbc }}"
+          NOW="$(date +"%Y-%m-%d-%H%M")"
+          IMAGE="${DIST_NAME}-${DIST_VERSION}-${{ steps.build.outputs.sbc }}-${BASE_OS_CODENAME}-${BASE_OS_VERSION}-${NOW}"
 
-          mv repository/src/workspace/*.img $IMAGE.img
+          sudo mv repository/src/workspace/*.img $IMAGE.img
 
           echo "image=${IMAGE}" >> $GITHUB_OUTPUT
 
@@ -94,7 +92,7 @@ jobs:
         run: |
           CPU_COUNT="$(nproc)"
           echo -e "\e[32mUsing ${CPU_COUNT} Cores for compression...\e[0m"
-          xz -efkvz9T"${CPU_COUNT}" ${{ steps.move-image.outputs.image }}.img || true
+          xz -efkvz9T"${CPU_COUNT}" ${{ steps.move-image.outputs.image }}.img
 
       - name: Calculating checksums
         shell: bash
@@ -119,3 +117,17 @@ jobs:
         with:
           name: ${{ steps.move-image.outputs.image }}.img.sha256
           path: ${{ steps.move-image.outputs.image }}.img.sha256
+
+      - name: Deploy to YUMI SERVER
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+        env:
+          DE_SSH_KEY: ${{ secrets.DE_SSH_KEY }}
+        shell: bash
+        run: |
+          echo "$DE_SSH_KEY" > /tmp/de_key && chmod 600 /tmp/de_key
+          mkdir -p ~/.ssh
+          ssh-keyscan 82.165.249.233 >> ~/.ssh/known_hosts 2>/dev/null
+          ssh -i /tmp/de_key root@82.165.249.233 "rm -f /var/www/download.yumi-lab.com/YumiOS-Klipper-V2/*.img.xz"
+          scp -i /tmp/de_key ${{ steps.move-image.outputs.image }}.img.xz root@82.165.249.233:/var/www/download.yumi-lab.com/YumiOS-Klipper-V2/
+          rm /tmp/de_key
+          echo "Deployed: /var/www/download.yumi-lab.com/YumiOS-Klipper-V2/${{ steps.move-image.outputs.image }}.img.xz"

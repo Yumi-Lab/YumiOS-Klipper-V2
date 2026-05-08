@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# YumiOS-Klipper-V2 — SmartPi ONE (armv7)
+# YumiOS-Klipper-V2 — SmartPi ONE (armhf)
 # shellcheck enable=require-variable-braces
 # shellcheck disable=SC2034
 
@@ -10,9 +10,20 @@ DOWNLOAD_URL_IMAGE="https://github.com/Yumi-Lab/SmartPi-armbian/releases/downloa
 # Disk size (MB)
 BASE_IMAGE_ENLARGEROOT=6000
 
-# Modules — fork-locked Klipper stack
-MODULES="base(udev_fix,armbian(armbian_net,klipper,moonraker,klipperscreen,crowsnest,usb-automount,cpu_governor,mcu-rpi,tmc-autotune))"
+# Architecture
+BASE_ARCH="armhf"
+
+# OS naming for image file naming convention
+BASE_OS_CODENAME="bookworm"
+BASE_OS_VERSION="debian12"
+
+# Modules — YumiOS Klipper stack for SmartPi One
+MODULES="base(udev_fix,armbian(armbian_net,yumios,klipper,is_req_preinstall,moonraker,mainsail,timelapse,klipperscreen,crowsnest,usb-automount,cpu_governor,mcu-rpi,tmc-autotune))"
 
 export BASE_ARCH
+export BASE_IMAGE_ENLARGEROOT
+export BASE_OS_CODENAME
+export BASE_OS_VERSION
 export DOWNLOAD_URL_CHECKSUM
 export DOWNLOAD_URL_IMAGE
+export MODULES

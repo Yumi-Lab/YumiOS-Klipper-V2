@@ -111,7 +111,7 @@ echo_green "Enable SPI interface on Orange Pi SBC's ... DONE!"
 
 ## Step 7: Remove unattended-upgrades
 echo_green "Remove 'unattended-upgrades' service ..."
-sudo apt-get remove --purge --yes unattended-upgrades
+apt-get remove --purge --yes unattended-upgrades
 ## END Step 7
 
 ## Step 8: Disable OTG serial console on "bananapim2zero"
