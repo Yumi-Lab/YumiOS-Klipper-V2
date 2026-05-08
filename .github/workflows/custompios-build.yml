@@ -1,61 +1,19 @@
-name: CustomPiOS Build
+name: Build YumiOS armv7
 
 on:
-  workflow_dispatch:
-    inputs:
-      board:
-        description: 'Target board architecture'
-        required: false
-        default: 'all'
-        type: choice
-        options:
-          - all
-          - armv7
-          - aarch64
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
 
 jobs:
-  build-matrix-setup:
-    name: Prepare build matrix
-    runs-on: ubuntu-latest
-    outputs:
-      boards: ${{ steps.setup.outputs.boards }}
-    steps:
-      - name: 📥 Checkout
-        uses: actions/checkout@v4
-
-      - name: 🔧 Setup build matrix
-        id: setup
-        run: |
-          BOARD_INPUT="${{ github.event.inputs.board }}"
-
-          if [ "$BOARD_INPUT" = "all" ] || [ -z "$BOARD_INPUT" ]; then
-            BOARDS='["raspberrypiarmhf", "raspberry4-64"]'
-          elif [ "$BOARD_INPUT" = "armv7" ]; then
-            BOARDS='["raspberrypiarmhf"]'
-          elif [ "$BOARD_INPUT" = "aarch64" ]; then
-            BOARDS='["raspberry4-64"]'
-          else
-            BOARDS='["raspberrypiarmhf", "raspberry4-64"]'
-          fi
-
-          echo "boards=${BOARDS}" >> $GITHUB_OUTPUT
-          echo "Selected boards: ${BOARDS}"
-
-  build-yumios:
-    name: Build YumiOS (${{ matrix.board }})
-    needs: build-matrix-setup
+  build:
+    name: Build armv7 Image
     runs-on: ubuntu-latest
     timeout-minutes: 120
-    strategy:
-      fail-fast: false
-      matrix:
-        board: ${{ fromJson(needs.build-matrix-setup.outputs.boards) }}
 
     steps:
-      - name: 📥 Checkout repository
+      - name: 📥 Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -67,24 +25,6 @@ jobs:
           echo "version=${YUMIOS_VERSION}" >> $GITHUB_OUTPUT
           echo "edition=${YUMIOS_EDITION}" >> $GITHUB_OUTPUT
           echo "date=$(date -u +'%Y-%m-%d')" >> $GITHUB_OUTPUT
-          echo "timestamp=$(date -u +'%Y%m%d_%H%M%S')" >> $GITHUB_OUTPUT
-
-      - name: 🏷️ Determine output filename
-        id: filename
-        run: |
-          BOARD="${{ matrix.board }}"
-          ARCH=""
-
-          if [ "$BOARD" = "raspberrypiarmhf" ]; then
-            ARCH="armv7"
-          elif [ "$BOARD" = "raspberry4-64" ]; then
-            ARCH="aarch64"
-          fi
-
-          FILENAME="yumios-klipper-v2-${ARCH}"
-          echo "arch=${ARCH}" >> $GITHUB_OUTPUT
-          echo "filename=${FILENAME}" >> $GITHUB_OUTPUT
-          echo "📦 Target: $FILENAME"
 
       - name: 🖥️ Set up system
         run: |
@@ -97,6 +37,9 @@ jobs:
             jq \
             zip \
             bzip2 \
+            xz-utils \
+            kpartx \
+            parted \
             qemu-user-static
 
       - name: 🐳 Set up Docker
@@ -112,198 +55,78 @@ jobs:
       - name: 📥 Pull CustomPiOS Docker image
         run: |
           echo "Pulling CustomPiOS Docker image..."
-          docker pull ghcr.io/${{ github.repository_owner }}/custompios:latest || \
-          docker pull ghcr.io/yumi-lab/custompios:latest || \
-          {
-            echo "⚠️ WARNING: CustomPiOS image not found in GHCR"
-            echo "⚠️ This is expected in Phase 4A (build workflow validation)"
-            echo "⚠️ Actual build will occur in Phase 4B"
-            exit 0
+          docker pull ghcr.io/yumi-lab/custompios:latest || {
+            echo "CustomPiOS image not found in GHCR"
+            exit 1
           }
 
-      - name: 🏗️ Build YumiOS image (${{ steps.filename.outputs.arch }})
+      - name: 🏗️ Build YumiOS armv7
         id: build
         run: |
-          echo "🏗️ Building YumiOS for ${{ matrix.board }}..."
-
-          # Create build output directory
+          echo "🏗️ Building YumiOS armv7..."
           mkdir -p /tmp/yumios-builds
 
-          BOARD="${{ matrix.board }}"
-          FILENAME="${{ steps.filename.outputs.filename }}"
+          BOARD="raspberrypiarmhf"
           VERSION="${{ steps.env.outputs.version }}"
           EDITION="${{ steps.env.outputs.edition }}"
+          FILENAME="yumios-klipper-v2-armv7"
 
           echo "📝 Build configuration:"
           echo "  Board: $BOARD"
-          echo "  Architecture: ${{ steps.filename.outputs.arch }}"
           echo "  Version: $VERSION"
           echo "  Edition: $EDITION"
-          echo "  Output: /tmp/yumios-builds"
 
-          # Build using CustomPiOS Docker image
           BUILD_CMD="docker run --rm \
             -v $(pwd):/build \
             -v /tmp/yumios-builds:/YumiOS/dist \
             -e YUMIOS_VERSION=$VERSION \
-            -e YUMIOS_EDITION=$EDITION \
+            -e YUMIOS_EDITION=\"$EDITION\" \
             -e PI_VERSION=$BOARD \
             ghcr.io/yumi-lab/custompios:latest /build/src/build.sh"
 
           echo "🐳 Running Docker build..."
-          eval "$BUILD_CMD" || {
-            echo "⚠️ Note: Using fallback image build strategy..."
-            # Fallback: create a test image if Docker image unavailable
-            dd if=/dev/zero of=/tmp/yumios-builds/${FILENAME}.img bs=1M count=512 2>/dev/null
-            echo "✓ Test image created (512MB)"
-          }
+          eval "$BUILD_CMD"
 
-          # Verify image was created
           if [ -f "/tmp/yumios-builds/${FILENAME}.img" ]; then
-            SIZE=$(du -h /tmp/yumios-builds/${FILENAME}.img | cut -f1)
-            echo "✓ Image built successfully: $SIZE"
+            echo "✓ Image created: ${FILENAME}.img"
           else
-            echo "⚠️ No image file found in /tmp/yumios-builds/"
-            ls -lah /tmp/yumios-builds/ || echo "Directory empty"
+            echo "❌ Build failed"
+            exit 1
           fi
 
-      - name: 📦 Package image
-        id: package
+      - name: 📦 Create ZIP archive
         run: |
-          FILENAME="${{ steps.filename.outputs.filename }}"
-          ARCH="${{ steps.filename.outputs.arch }}"
+          cd /tmp/yumios-builds
+          zip -j yumios-armv7/yumios-klipper-v2-armv7.zip yumios-klipper-v2-armv7.img
+          ls -lh yumios-armv7/
 
-          mkdir -p /tmp/yumios-artifacts
+      - name: 🔐 Generate checksums
+        run: |
+          cd /tmp/yumios-builds
+          sha256sum yumios-armv7/yumios-klipper-v2-armv7.zip > checksums/ARTIFACTS.sha256
+          cat checksums/ARTIFACTS.sha256
 
-          # Check if image exists and package it
-          if [ -f "/tmp/yumios-builds/${FILENAME}.img" ]; then
-            echo "📦 Compressing ${FILENAME}.img..."
-            cd /tmp/yumios-builds
-            zip -q "/tmp/yumios-artifacts/${FILENAME}.zip" "${FILENAME}.img"
-            SIZE=$(du -h "/tmp/yumios-artifacts/${FILENAME}.zip" | cut -f1)
-            echo "✓ Package created: ${FILENAME}.zip ($SIZE)"
-          else
-            echo "⚠️ Image file not found, creating placeholder"
-            touch "/tmp/yumios-artifacts/${FILENAME}.zip.placeholder"
-          fi
-
-          echo "artifact_path=/tmp/yumios-artifacts/${FILENAME}.zip" >> $GITHUB_OUTPUT
-          ls -lah /tmp/yumios-artifacts/ || true
-
-      - name: 📤 Upload build artifact
+      - name: 📤 Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: yumios-${{ steps.filename.outputs.arch }}
-          path: /tmp/yumios-artifacts/
+          name: yumios-armv7
+          path: /tmp/yumios-builds/yumios-armv7/yumios-klipper-v2-armv7.zip
           retention-days: 30
-          if-no-files-found: warn
-
-  generate-checksums:
-    name: Generate checksums
-    needs: [build-yumios, build-matrix-setup]
-    runs-on: ubuntu-latest
-    if: always()
-
-    steps:
-      - name: 📥 Checkout
-        uses: actions/checkout@v4
-
-      - name: 📋 Load environment
-        id: env
-        run: |
-          source src/.env.build
-          echo "version=${YUMIOS_VERSION}" >> $GITHUB_OUTPUT
-          echo "date=$(date -u +'%Y-%m-%d')" >> $GITHUB_OUTPUT
-
-      - name: 📥 Download all artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: /tmp/yumios-artifacts-all
-
-      - name: 🔐 Generate SHA256 checksums
-        id: checksums
-        run: |
-          cd /tmp/yumios-artifacts-all
-
-          echo "Generating checksums..."
-
-          # Create checksums file
-          cat > ARTIFACTS.sha256 << 'EOF'
-          # YumiOS Klipper V2 — Build Artifacts Checksums
-          # Generated: ${{ steps.env.outputs.date }}
-          # Version: ${{ steps.env.outputs.version }}
-          #
-          # Verify checksums:
-          #   sha256sum -c ARTIFACTS.sha256
-          #
-          # Verify individual file:
-          #   sha256sum -c ARTIFACTS.sha256 | grep yumios-klipper-v2-armv7.zip
-
-          EOF
-
-          # Find and checksum all .zip files
-          if find . -name "*.zip" -o -name "*.img"; then
-            find . -type f \( -name "*.zip" -o -name "*.img" \) ! -name "*.placeholder" | sort | while read file; do
-              sha256sum "$file" >> ARTIFACTS.sha256
-            done
-            echo "✓ Checksums generated"
-          else
-            echo "⚠️ No artifacts found (Phase 4A: placeholders only)"
-            echo "# No artifacts yet — Phase 4B will generate actual images" >> ARTIFACTS.sha256
-          fi
-
-          cat ARTIFACTS.sha256
 
       - name: 📤 Upload checksums
         uses: actions/upload-artifact@v4
         with:
           name: checksums
-          path: /tmp/yumios-artifacts-all/ARTIFACTS.sha256
+          path: /tmp/yumios-builds/checksums/ARTIFACTS.sha256
           retention-days: 30
 
-  build-summary:
-    name: Build Summary
-    needs: [build-yumios, generate-checksums]
-    runs-on: ubuntu-latest
-    if: always()
-
-    steps:
-      - name: 📥 Checkout
-        uses: actions/checkout@v4
-
-      - name: 📋 Load environment
-        id: env
+      - name: ✅ Build summary
         run: |
-          source src/.env.build
-          echo "version=${YUMIOS_VERSION}" >> $GITHUB_OUTPUT
-          echo "edition=${YUMIOS_EDITION}" >> $GITHUB_OUTPUT
-
-      - name: 📊 Build complete summary
-        run: |
-          echo "## ✅ YumiOS Build Complete"
+          echo "=========================================="
+          echo "✅ YumiOS armv7 Build Complete"
+          echo "=========================================="
+          echo "Version: ${{ steps.env.outputs.version }}"
+          echo "Edition: ${{ steps.env.outputs.edition }}"
+          echo "Date: ${{ steps.env.outputs.date }}"
           echo ""
-          echo "**Version**: ${{ steps.env.outputs.version }}"
-          echo "**Edition**: ${{ steps.env.outputs.edition }}"
-          echo ""
-          echo "### Build Artifacts"
-          echo "- [ ] yumios-klipper-v2-armv7.zip (armv7 boards)"
-          echo "- [ ] yumios-klipper-v2-aarch64.zip (aarch64 boards)"
-          echo "- [ ] ARTIFACTS.sha256 (checksum verification)"
-          echo ""
-          echo "### Download Location"
-          echo "Artifacts available in GitHub Actions → this workflow run"
-          echo ""
-          echo "### Next Steps"
-          echo "1. **Phase 4B**: Download artifacts and verify checksums"
-          echo "2. **Phase 4C**: Boot images in QEMU and validate services"
-          echo "3. **Phase 4D**: Publish release artifacts to GitHub Releases"
-          echo ""
-          echo "### Verification"
-          echo "```bash"
-          echo "# Download artifacts"
-          echo "gh run download -D /tmp/yumios"
-          echo ""
-          echo "# Verify checksums"
-          echo "cd /tmp/yumios/checksums"
-          echo "sha256sum -c ARTIFACTS.sha256"
-          echo "```"
+          echo "Artifacts ready for download!"
