@@ -97,6 +97,10 @@ sudo -u "${BASE_USER}" ./scripts/set-policykit-rules.sh --root
 ## Step 10: Leave moonraker
 popd &> /dev/null || exit 1
 
+## Step 10b: Cleanup tmp files to free space for subsequent modules
+rm -rf /tmp/piwheels /tmp/pillow-constraints.txt
+rm -rf "/home/${BASE_USER}/tmp"
+
 ## Step 11: leave home dir
 popd &> /dev/null || exit 1
 
