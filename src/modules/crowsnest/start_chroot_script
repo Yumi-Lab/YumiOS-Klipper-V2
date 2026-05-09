@@ -42,6 +42,10 @@ get_pkglist() {
 
 echo_green "Installing crowsnest ..."
 
+## Free /tmp space — pip caches from previous modules can fill tmpfs
+rm -rf /tmp/pip-* /tmp/piwheels /tmp/*.whl /tmp/pillow-constraints.txt 2>/dev/null || true
+rm -rf /home/${BASE_USER}/.cache/pip 2>/dev/null || true
+
 ## Force apt update
 apt-get update
 ## Make sure 'git' is installed!
