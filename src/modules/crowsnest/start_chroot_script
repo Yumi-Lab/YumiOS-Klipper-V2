@@ -42,6 +42,11 @@ get_pkglist() {
 
 echo_green "Installing crowsnest ..."
 
+## Debug: check disk space before install
+echo_green "Disk space before crowsnest:"
+df -h / /tmp 2>/dev/null || true
+ls -la /tmp/ 2>/dev/null | head -20 || true
+
 ## Force apt update
 apt-get update
 ## Make sure 'git' is installed!

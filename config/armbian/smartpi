@@ -8,7 +8,7 @@ DOWNLOAD_URL_CHECKSUM="https://github.com/Yumi-Lab/SmartPi-armbian/releases/down
 DOWNLOAD_URL_IMAGE="https://github.com/Yumi-Lab/SmartPi-armbian/releases/download/v1.7.0/Yumi-smartpi1-bookworm-debian12-server-2026-04-23-0753.img.xz"
 
 # Disk size (MB)
-BASE_IMAGE_ENLARGEROOT=6000
+BASE_IMAGE_ENLARGEROOT=8000
 
 # Architecture
 BASE_ARCH="armhf"

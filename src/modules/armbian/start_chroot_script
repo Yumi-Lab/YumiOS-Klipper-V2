@@ -43,14 +43,9 @@ if_group_exists_run() {
 # Will be removed in cleanup
 echo "${BASE_USER} ALL=(ALL:ALL) NOPASSWD:ALL" >> /etc/sudoers
 
-## Step 0: Ensure /tmp is writable and not a size-limited tmpfs
-## Armbian images mount /tmp as tmpfs which overflows during pip builds
-if mount | grep -q "on /tmp type tmpfs"; then
-    echo_green "Remounting /tmp as non-tmpfs to prevent overflow during build ..."
-    umount /tmp 2>/dev/null || true
-    mkdir -p /tmp
-    chmod 1777 /tmp
-fi
+## Step 0: Log disk space for debugging
+echo_green "Disk space at start of armbian module:"
+df -h / /tmp 2>/dev/null || true
 
 ## Step 1: Install armbian specific packages
 apt update
