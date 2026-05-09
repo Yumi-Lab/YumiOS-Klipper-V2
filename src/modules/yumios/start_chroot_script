@@ -61,3 +61,11 @@ apt-get update --allow-releaseinfo-change
 # shellcheck disable=SC2086
 check_install_pkgs ${YUMIOS_DEPS}
 ## END Step 3
+
+## Step 4: Clone yumi-config (needed by mcu-rpi for klipper.elf)
+echo_green "Clone yumi-config ..."
+pushd "/home/${BASE_USER}" &> /dev/null || exit 1
+sudo -u "${BASE_USER}" git clone https://github.com/Yumi-Lab/yumi-config.git
+popd &> /dev/null || exit 1
+echo_green "Clone yumi-config ... [DONE]"
+## END Step 4
