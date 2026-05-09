@@ -43,11 +43,6 @@ if_group_exists_run() {
 # Will be removed in cleanup
 echo "${BASE_USER} ALL=(ALL:ALL) NOPASSWD:ALL" >> /etc/sudoers
 
-## Step 0: Fix /tmp permissions (must be 1777 for apt-key and pip)
-## SmartPi-armbian base image sets /tmp to 1755 which blocks non-root
-## users (_apt, pi) from creating temporary files
-chmod 1777 /tmp
-
 ## Step 1: Install armbian specific packages
 apt update
 # shellcheck disable=SC2086
