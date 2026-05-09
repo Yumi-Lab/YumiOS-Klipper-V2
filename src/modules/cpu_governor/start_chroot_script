@@ -37,8 +37,6 @@ RemainAfterExit=yes
 WantedBy=multi-user.target
 EOF
 
-# Enable service manually in chroot (systemctl enable may fail silently)
-mkdir -p /etc/systemd/system/multi-user.target.wants/
-ln -sf /etc/systemd/system/set-cpu-freq.service /etc/systemd/system/multi-user.target.wants/set-cpu-freq.service
+systemctl_if_exists enable set-cpu-freq.service
 
 echo_green "CPU governor set to userspace at 912MHz ... [DONE]"

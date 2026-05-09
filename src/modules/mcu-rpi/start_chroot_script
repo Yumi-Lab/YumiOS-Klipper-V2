@@ -23,8 +23,7 @@ echo_green "Install MCU RPI..."
 #make service
 cd /home/pi/klipper/
 cp /home/pi/klipper/scripts/klipper-mcu.service /etc/systemd/system/
-mkdir -p /etc/systemd/system/multi-user.target.wants/
-ln -sf /etc/systemd/system/klipper-mcu.service /etc/systemd/system/multi-user.target.wants/klipper-mcu.service
+systemctl_if_exists enable klipper-mcu.service
 
 
 
@@ -51,7 +50,7 @@ if [ -f /etc/systemd/system/klipper-mcu.service ]; then
     echo "Attempting host MCU restart..."
     systemctl restart klipper-mcu
 fi
-sudo usermod -a -G tty pi
+usermod -a -G tty pi
 
 echo_green "Install MCU RPI... [DONE]"
 

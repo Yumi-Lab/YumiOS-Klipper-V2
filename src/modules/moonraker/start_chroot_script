@@ -24,87 +24,87 @@ install_cleanup_trap
 
 # pip install for Moonraker
 apt-get install -y python3-pip python3.11-venv python3-virtualenv python3-dev \
-libopenjp2-7 python3-libgpiod curl libcurl4-openssl-dev libssl-dev liblmdb-dev \
-libsodium-dev zlib1g-dev libjpeg-dev packagekit wireless-tools python3-pil
-
-# Module only Variables
-MN_BUILD_PACKAGE_FILE="/tmp/mn_packages.lst"
-#MN_BUILD_INSTALL_SH="/home/${BASE_USER}/moonraker/scripts/install-moonraker.sh"
+libopenjp2-7 libopenjp2-7-dev python3-libgpiod curl libcurl4-openssl-dev \
+libssl-dev liblmdb-dev libsodium-dev zlib1g-dev libjpeg-dev libpng-dev \
+libtiff-dev libfreetype6-dev liblcms2-dev libwebp-dev tcl-dev tk-dev \
+packagekit wireless-tools python3-pil
 
 echo_green "Installing Moonraker and enable Moonraker Service ..."
-echo_green "apt update ..."
+
 ## Force apt update
 apt-get update
-echo_green "check git install ..."
 ## Make sure 'git' is installed!
 check_install_pkgs git
 
-echo_green "Move to Home Dir ..."
-## Step 1: Move to Home Dir as WorkingDirectoy
+## Step 1: Move to Home Dir as WorkingDirectory
 pushd "/home/${BASE_USER}" &> /dev/null || exit 1
 
-echo_green "Clone moonraker repo ..."
 ## Step 2: clone moonraker repo
+echo_green "Clone moonraker repo ..."
 gitclone MOONRAKER_REPO moonraker
+chown -R "${BASE_USER}:${BASE_USER}" "/home/${BASE_USER}/moonraker"
 
-echo_green "grep PKGLIST from install moonraker ..."
-## Step 3: grep PKGLIST from install-moonraker.sh for dependencies
-echo_green "Generating packages file ..."
-#grep "PKGLIST=" "${MN_BUILD_INSTALL_SH}" >> "${MN_BUILD_PACKAGE_FILE}"
+## Step 2b: Pre-create moonraker virtualenv and install Pillow from piwheels
+## (avoids building Pillow from source on armv7l where PyPI has no wheels)
+## NOTE: pip inside the armhf chroot on an aarch64 kernel reports platform as
+## linux_aarch64, so it ignores armv7l wheels from piwheels. We download and
+## install the wheel manually to bypass platform tagging.
+echo_green "Pre-creating moonraker virtualenv and pre-installing Pillow from piwheels ..."
+MN_REQ_FILE="/home/${BASE_USER}/moonraker/scripts/moonraker-requirements.txt"
+PILLOW_CONSTRAINT=""
+if [[ -f "${MN_REQ_FILE}" ]]; then
+    PILLOW_CONSTRAINT=$(grep '^pillow' "${MN_REQ_FILE}" | head -n 1 || true)
+fi
+if [[ -z "${PILLOW_CONSTRAINT}" ]]; then
+    PILLOW_CONSTRAINT="pillow>=9.5.0,<=12.1.0"
+fi
 
-echo_green "Rename PKGLIST ..."
-## Step 4: Rename PKGLIST to Module usable Var
-#echo_green "Rename variable PKGLIST to MOONRAKER_DEPS ..."
-#sed -i 's/PKGLIST/MOONRAKER_DEPS/g' "${MN_BUILD_PACKAGE_FILE}"
+# piwheels latest compatible version for armv7l
+PILLOW_VERSION="12.0.0"
+PY_TAG="cp311"
+PLATFORM_TAG="linux_armv7l"
+WHEEL_NAME="pillow-${PILLOW_VERSION}-${PY_TAG}-${PY_TAG}-${PLATFORM_TAG}.whl"
+WHEEL_URL="https://www.piwheels.org/simple/pillow/${WHEEL_NAME}"
 
-echo_green "Source cn_package.lst..."
-## Step 5: Source cn_package.lst file
-# shellcheck disable=SC1090
-# Shellcheck has to be disabled here,
-# because it is an dynamic generated file and not checkable
-#. "${MN_BUILD_PACKAGE_FILE}"
+# Create TMPDIR with proper permissions before virtualenv
+sudo -u "${BASE_USER}" mkdir -p "/home/${BASE_USER}/tmp"
 
-echo_green "Install package ..."
-## Step 6: Install packages
-echo_green "Install moonraker dependencies ..."
-# shellcheck disable=SC2086
-# disabled because we need 'wordsplitting'
-#check_install_pkgs ${MOONRAKER_DEPS}
+sudo -u "${BASE_USER}" virtualenv -p python3 "/home/${BASE_USER}/moonraker-env"
+sudo -u "${BASE_USER}" "/home/${BASE_USER}/moonraker-env/bin/pip" install --upgrade pip setuptools wheel
 
-echo_green "Move to moonraker as working directory ..."
+mkdir -p /tmp/piwheels
+echo_green "Downloading precompiled Pillow wheel: ${WHEEL_NAME} ..."
+if ! curl -fsSL -o "/tmp/piwheels/${WHEEL_NAME}" "${WHEEL_URL}"; then
+    echo_red "Failed to download Pillow wheel from piwheels (${WHEEL_URL})"
+    exit 1
+fi
+sudo -u "${BASE_USER}" "/home/${BASE_USER}/moonraker-env/bin/pip" install "/tmp/piwheels/${WHEEL_NAME}"
+
+# Create constraints file to pin Pillow version and prevent reinstall
+echo "pillow==${PILLOW_VERSION}" > /tmp/pillow-constraints.txt
+
 ## Step 7: Move to moonraker as working directory
 pushd "/home/${BASE_USER}/moonraker" &> /dev/null || exit 1
 
-echo_green "Run moonraker install routine ..."
 ## Step 8: Run moonraker install routine
 echo_green "Launch moonraker install routine ..."
-sudo -u "${BASE_USER}" ./scripts/install-moonraker.sh -s -z -x
+sudo -u "${BASE_USER}" TMPDIR="/home/${BASE_USER}/tmp" PIP_CONSTRAINT="/tmp/pillow-constraints.txt" ./scripts/install-moonraker.sh -s -z -x
 
-
-echo_green "Install policykit rules ..."
 ## Step 9: Install policykit rules
 echo_green "Install moonrakers PolicyKit Rules ..."
 sudo -u "${BASE_USER}" ./scripts/set-policykit-rules.sh --root
 
-echo_green "Leave moonraker ..."
 ## Step 10: Leave moonraker
 popd &> /dev/null || exit 1
 
-echo_green "clean package.lst ..."
-## Step 11: clean packages.lst file
-rm -f "${MN_BUILD_PACKAGE_FILE}"
-
-echo_green "Leave Home dir ..."
-## Step 12: leave home dir
+## Step 11: leave home dir
 popd &> /dev/null || exit 1
 
-echo_green "install MainsailOS ..."
-## Step 13: Install MainsailOS premade moonraker.conf
+## Step 12: Install MainsailOS premade moonraker.conf
 echo_green "Copying MainsailOS premade moonraker.conf ..."
 unpack /filesystem/home/"${BASE_USER}" /home/"${BASE_USER}" "${BASE_USER}"
 
-echo_green "Enable Service ..."
-## Step 14:
+## Step 13: Enable moonraker.service
 echo_green "Enable moonraker.service ..."
 systemctl_if_exists enable moonraker.service
 
