@@ -52,9 +52,22 @@ Thank you for being patient and have fun with your
 EOF
 }
 
+needs_rotation() {
+    # Detect if HDMI display needs 180° rotation based on resolution.
+    # The original SmartPad 7" LCD is 800x480 and requires rotation
+    # due to connector position. Future screens (different resolution
+    # or rotation done in HDMI chip at factory) don't need it.
+    local resolution
+    resolution="$(cat /sys/class/graphics/fb0/virtual_size 2>/dev/null)"
+    if [[ "${resolution}" == "800,480" ]]; then
+        echo "1"
+    else
+        echo "0"
+    fi
+}
+
 apply_hdmi_rotation() {
-    # Rotate HDMI display 180° for SmartPad (connector position requires it)
-    # This adds fbcon rotation + KlipperScreen display rotation
+    # Rotate HDMI display 180° (fbcon + Xorg + touch)
     local envfile="/boot/armbianEnv.txt"
 
     if [[ -f "${envfile}" ]]; then
@@ -98,9 +111,13 @@ setfont /usr/share/consolefonts/Lat15-TerminusBold20x10.psf.gz 2>/dev/null || tr
 "${DIALOG[@]}" --clear --title "YumiOS First Boot" \
     --no-cancel --no-ok --pause "$(welcome_msg)" "${RESOLUTION[@]}" 15
 
-# Step 1: Apply HDMI rotation
-apply_hdmi_rotation
-sleep 1 | "${DIALOG[@]}" --clear --gauge "Applying display rotation ..." "${RESOLUTION[@]}" 20
+# Step 1: Apply HDMI rotation (only if 800x480 display detected)
+if [[ "$(needs_rotation)" == "1" ]]; then
+    apply_hdmi_rotation
+    sleep 1 | "${DIALOG[@]}" --clear --gauge "Applying display rotation (800x480 detected) ..." "${RESOLUTION[@]}" 20
+else
+    sleep 1 | "${DIALOG[@]}" --clear --gauge "No rotation needed for this display ..." "${RESOLUTION[@]}" 20
+fi
 
 # Step 2: Enable boot logo
 if [[ -f /boot/armbianEnv.txt ]]; then
