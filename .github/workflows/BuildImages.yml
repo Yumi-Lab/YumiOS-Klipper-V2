@@ -49,6 +49,7 @@ jobs:
   build:
     needs: setup
     runs-on: ubuntu-22.04-arm
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
@@ -92,7 +93,7 @@ jobs:
         run: |
           CPU_COUNT="$(nproc)"
           echo -e "\e[32mUsing ${CPU_COUNT} Cores for compression...\e[0m"
-          xz -efkvz9T"${CPU_COUNT}" ${{ steps.move-image.outputs.image }}.img
+          xz -efkvz6T"${CPU_COUNT}" ${{ steps.move-image.outputs.image }}.img
 
       - name: Calculating checksums
         shell: bash
