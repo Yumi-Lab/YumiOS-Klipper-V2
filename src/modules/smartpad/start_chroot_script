@@ -32,12 +32,11 @@ is_board_type() {
 }
 
 has_display() {
-    # SmartPad has a display, SmartPi ONE does not
-    if [[ "$(is_board_type)" == "smartpad" ]]; then
-        echo "1"
-    else
-        echo "0"
-    fi
+    # SmartPad and SmartPi ONE are the same hardware.
+    # SmartPad = with display, SmartPi ONE = headless.
+    # Since we can't detect display at build time (chroot), always enable
+    # the firstboot wizard — it will detect display at runtime.
+    echo "1"
 }
 
 echo_green "Apply Yumi-Lab specific patches..."

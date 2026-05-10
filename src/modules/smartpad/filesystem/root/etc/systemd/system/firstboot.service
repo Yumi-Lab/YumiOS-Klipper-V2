@@ -1,16 +1,17 @@
 [Unit]
-Description=Firstboot initialisation
-After=basic.target
-Before=multi-user.target
+Description=YumiOS First Boot Setup
+After=multi-user.target
 ConditionPathExists=/.firstboot
 
 [Service]
+Type=oneshot
 ExecStart=/usr/local/bin/firstboot
 StandardInput=tty
+StandardOutput=tty
 TTYPath=/dev/tty2
 TTYReset=yes
 TTYVHangup=yes
-TimeoutSec=120
+TimeoutSec=300
 
 [Install]
 WantedBy=multi-user.target
