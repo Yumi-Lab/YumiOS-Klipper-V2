@@ -15,9 +15,11 @@
 # Each entry will be used in setup matrix
 
 buildtest:
-  # YumiOS-Klipper-V2: armv7 only (SmartPi ONE)
+  # YumiOS-Klipper-V2: SmartPi ONE (armhf)
   - armbian/smartpi
+  - armbian/smartpi-trixie
 
 release:
-  # YumiOS-Klipper-V2: armv7 only (SmartPi ONE)
+  # YumiOS-Klipper-V2: SmartPi ONE (armhf)
   - armbian/smartpi
+  - armbian/smartpi-trixie

@@ -60,11 +60,14 @@ if [[ -z "${PILLOW_CONSTRAINT}" ]]; then
 fi
 
 # piwheels latest compatible version for armv7l
+# Detect Python version for correct wheel tag (Bookworm=3.11, Trixie=3.13)
 PILLOW_VERSION="12.0.0"
-PY_TAG="cp311"
+PY_MAJOR_MINOR=$(python3 -c 'import sys; print(f"cp{sys.version_info.major}{sys.version_info.minor}")')
+PY_TAG="${PY_MAJOR_MINOR}"
 PLATFORM_TAG="linux_armv7l"
 WHEEL_NAME="pillow-${PILLOW_VERSION}-${PY_TAG}-${PY_TAG}-${PLATFORM_TAG}.whl"
 WHEEL_URL="https://www.piwheels.org/simple/pillow/${WHEEL_NAME}"
+echo_green "Detected Python tag: ${PY_TAG} — Pillow wheel: ${WHEEL_NAME}"
 
 # Create TMPDIR with proper permissions before virtualenv
 sudo -u "${BASE_USER}" mkdir -p "/home/${BASE_USER}/tmp"

@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# YumiOS-Klipper-V2 — SmartPi ONE (armhf) — Trixie (Debian 13)
+# shellcheck enable=require-variable-braces
+# shellcheck disable=SC2034
+
+# Image base (SmartPi-armbian v1.8.0-rc1 pre-release)
+DOWNLOAD_URL_CHECKSUM="https://github.com/Yumi-Lab/SmartPi-armbian/releases/download/v1.8.0-rc1/Yumi-smartpi1-trixie-debian13-server-2026-04-23-1419.img.xz.sha256"
+DOWNLOAD_URL_IMAGE="https://github.com/Yumi-Lab/SmartPi-armbian/releases/download/v1.8.0-rc1/Yumi-smartpi1-trixie-debian13-server-2026-04-23-1419.img.xz"
+
+# Disk size (MB)
+BASE_IMAGE_ENLARGEROOT=6000
+
+# Architecture
+BASE_ARCH="armhf"
+
+# OS naming
+BASE_OS_CODENAME="trixie"
+BASE_OS_VERSION="debian13"
+
+# Modules — same stack as Bookworm
+MODULES="base(udev_fix,armbian(armbian_net,yumios,klipper,is_req_preinstall,moonraker,mainsail,timelapse,klipperscreen,crowsnest,usb-automount,cpu_governor,mcu-rpi,tmc-autotune,smartpad))"
+
+export BASE_ARCH
+export BASE_IMAGE_ENLARGEROOT
+export BASE_OS_CODENAME
+export BASE_OS_VERSION
+export DOWNLOAD_URL_CHECKSUM
+export DOWNLOAD_URL_IMAGE
+export MODULES
