@@ -13,5 +13,5 @@
 #### python3-opencv is needed for moonraker-obico by obico in version 2.0
 
 [ -n "$YUMIOS_DEPS" ] || YUMIOS_DEPS="python3-serial python3-opencv wavemon \
-hexedit tcpdump iptraf mc htop dcfldd nano usbutils ranger tldr ncdu \
-can-utils multitail fd-find lsof minicom janus"
+hexedit tcpdump iptraf mc htop dcfldd nano usbutils ranger ncdu \
+can-utils multitail fd-find lsof minicom"
