@@ -21,15 +21,19 @@ install_cleanup_trap
 # Install TMC AUTOTUNE for GCODES
 echo_green "Install TMC Autotune..."
 echo_green "Install TMC Autotune git clone..."
-pushd /home/pi &>/dev/null || exit 1
+pushd "/home/${BASE_USER}" &>/dev/null || exit 1
 sudo -u "${BASE_USER}" git clone https://github.com/Yumi-Lab/klipper_tmc_autotune.git
-pushd klipper_tmc_autotune &>/dev/null || exit 1
-chmod +x install.sh
-sudo -u "${BASE_USER}" ./install.sh
-git config --global --add safe.directory /home/pi/klipper_tmc_autotune
-git reset --hard HEAD
-popd &>/dev/null || exit 1
-chown -R "${BASE_USER}:${BASE_USER}" /home/pi/klipper_tmc_autotune
+
+## install.sh cannot run in chroot (checks systemctl for klipper.service)
+## Do manually what it does: symlink extensions into klippy/extras/
+KLIPPER_EXTRAS="/home/${BASE_USER}/klipper/klippy/extras"
+TMC_DIR="/home/${BASE_USER}/klipper_tmc_autotune"
+ln -srfn "${TMC_DIR}/autotune_tmc.py" "${KLIPPER_EXTRAS}/autotune_tmc.py"
+ln -srfn "${TMC_DIR}/motor_constants.py" "${KLIPPER_EXTRAS}/motor_constants.py"
+ln -srfn "${TMC_DIR}/motor_database.cfg" "${KLIPPER_EXTRAS}/motor_database.cfg"
+
+git config --global --add safe.directory "${TMC_DIR}"
+chown -R "${BASE_USER}:${BASE_USER}" "${TMC_DIR}"
 popd &>/dev/null || exit 1
 echo_green "Install TMC Autotune... [DONE]"
 
