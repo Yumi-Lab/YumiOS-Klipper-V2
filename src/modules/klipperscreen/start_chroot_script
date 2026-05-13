@@ -19,7 +19,7 @@ source /common.sh
 install_cleanup_trap
 
 # pip install for KlipperScreen
-apt-get install -y python3-pip python3.11-venv python3-pil
+apt-get install -y python3-pip python3-venv python3-pil
 
 
 # Module only Variables
