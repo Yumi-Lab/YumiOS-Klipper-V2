@@ -16,12 +16,10 @@ YUMIOS_DEPS_BASE="python3-serial python3-opencv wavemon \
 hexedit tcpdump iptraf mc htop dcfldd nano usbutils ranger ncdu \
 can-utils multitail fd-find lsof minicom"
 
-# tldr: only available on Bookworm (removed from Trixie repos)
-# janus: now handled by moonraker-yumi-lab ensure_janus.sh (apt or .deb)
-YUMIOS_DEPS_BOOKWORM_ONLY="tldr"
-
+# janus: handled by moonraker-yumi-lab ensure_janus.sh (apt or .deb)
+# tldr → tealdeer on Trixie (same tool, Rust implementation)
 if [[ "${BASE_OS_CODENAME}" == "trixie" ]]; then
-    [ -n "$YUMIOS_DEPS" ] || YUMIOS_DEPS="${YUMIOS_DEPS_BASE}"
+    [ -n "$YUMIOS_DEPS" ] || YUMIOS_DEPS="${YUMIOS_DEPS_BASE} tealdeer"
 else
-    [ -n "$YUMIOS_DEPS" ] || YUMIOS_DEPS="${YUMIOS_DEPS_BASE} ${YUMIOS_DEPS_BOOKWORM_ONLY}"
+    [ -n "$YUMIOS_DEPS" ] || YUMIOS_DEPS="${YUMIOS_DEPS_BASE} tldr"
 fi
