@@ -12,6 +12,16 @@
 #### python3-serial is needed later on for possible CAN adapters
 #### python3-opencv is needed for moonraker-obico by obico in version 2.0
 
-[ -n "$YUMIOS_DEPS" ] || YUMIOS_DEPS="python3-serial python3-opencv wavemon \
+YUMIOS_DEPS_BASE="python3-serial python3-opencv wavemon \
 hexedit tcpdump iptraf mc htop dcfldd nano usbutils ranger ncdu \
 can-utils multitail fd-find lsof minicom"
+
+# janus (WebRTC for moonraker-yumi/obico) + tldr: available on Bookworm
+# but removed from Trixie. TODO: pre-compile janus .deb in moonraker-yumi-lab repo
+YUMIOS_DEPS_BOOKWORM_ONLY="tldr janus"
+
+if [[ "${BASE_OS_CODENAME}" == "trixie" ]]; then
+    [ -n "$YUMIOS_DEPS" ] || YUMIOS_DEPS="${YUMIOS_DEPS_BASE}"
+else
+    [ -n "$YUMIOS_DEPS" ] || YUMIOS_DEPS="${YUMIOS_DEPS_BASE} ${YUMIOS_DEPS_BOOKWORM_ONLY}"
+fi
