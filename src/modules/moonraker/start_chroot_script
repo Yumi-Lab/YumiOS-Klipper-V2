@@ -23,7 +23,7 @@ source /common.sh
 install_cleanup_trap
 
 # pip install for Moonraker
-apt-get install -y python3-pip python3.11-venv python3-virtualenv python3-dev \
+apt-get install -y python3-pip python3-venv python3-virtualenv python3-dev \
 libopenjp2-7 libopenjp2-7-dev python3-libgpiod curl libcurl4-openssl-dev \
 libssl-dev liblmdb-dev libsodium-dev zlib1g-dev libjpeg-dev libpng-dev \
 libtiff-dev libfreetype6-dev liblcms2-dev libwebp-dev tcl-dev tk-dev \
