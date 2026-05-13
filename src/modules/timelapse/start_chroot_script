@@ -81,10 +81,9 @@ if [[ -d "${TIMELAPSE_CONFIG_DIR}" ]]; then
     ln -sf "${TIMELAPSE_SRC_DIR}/klipper_macro/timelapse.cfg" "${TIMELAPSE_CONFIG_DIR}/timelapse.cfg"
 fi
 
-## Skip moonraker.conf modification — our moonraker.conf already has
-## [timelapse] and [update_manager timelapse] sections configured.
-## The template would create duplicates that crash moonraker.
-echo "Skipping moonraker.conf modification (already configured) ..."
+## Extend moonraker.conf with timelapse sections
+echo "Modifying moonraker.conf ..."
+add_timelapse_entry
 
 popd &> /dev/null || exit 1
 

@@ -49,14 +49,15 @@ pushd "/home/${BASE_USER}/KlipperScreen" &> /dev/null || exit 1
 echo_green "Launch KlipperScreen install routine ..."
 sudo -u "${BASE_USER}" "${KS_BUILD_INSTALL_SH}"
 
-## Step 5: Update moonraker.conf
-## Skip — our moonraker.conf already has [update_manager KlipperScreen].
-## Appending ks_update_entry.txt would create a duplicate section that
-## crashes moonraker with "Duplicate section" error.
-echo_green "Skipping moonraker.conf update (already configured) ..."
-## Still unpack to /tmp for the chmod 1777 fix (keeps /tmp writable)
-unpack /filesystem/tmp /tmp root
-chmod 1777 /tmp
+## Step 5: Update moonraker.conf with KlipperScreen update_manager entry
+if [[ -f "${KS_MOONRAKER_CONF_PATH}" ]]; then
+    echo_green "Copying temporary file ..."
+    unpack /filesystem/tmp /tmp root
+    chmod 1777 /tmp
+    cat /tmp/ks_update_entry.txt >> "${KS_MOONRAKER_CONF_PATH}"
+else
+    echo_red "File moonraker.conf not found ... [SKIPPED]"
+fi
 
 ## Step 6: Leave KlipperScreen
 popd &> /dev/null || exit 1
