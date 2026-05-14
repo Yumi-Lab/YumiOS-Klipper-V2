@@ -6,6 +6,7 @@
 #### - Applies console rotation BEFORE showing wizard (correct orientation)
 #### - Configures persistent rotation (armbianEnv.txt + Xorg)
 #### - Enables Plymouth boot logo
+#### - Compiles Klipper Linux MCU for GPIO (native to current distro)
 #### - Generates initramfs
 #### - Enables KlipperScreen
 #### - Disables itself
@@ -144,15 +145,37 @@ if [[ -f /boot/armbianEnv.txt ]]; then
 fi
 sleep 1 | "${DIALOG[@]}" --clear --gauge "Enabling boot logo ..." "${RESOLUTION[@]}" 40
 
-# Step 3: Generate initramfs
+# Step 3: Compile Klipper Linux MCU (native to current distro)
+if [[ -f /home/pi/klipper_linux.config ]]; then
+    "${DIALOG[@]}" --clear --gauge "Compiling Klipper MCU for GPIO ..." "${RESOLUTION[@]}" 50 &
+    GAUGE_PID=$!
+    cd /home/pi/klipper
+    make clean &>/dev/null
+    cp /home/pi/klipper_linux.config .config
+    make olddefconfig &>/dev/null
+    make -j"$(nproc)" &>/dev/null
+    rm -f /usr/local/bin/klipper_mcu
+    cp out/klipper.elf /usr/local/bin/klipper_mcu
+    chmod 755 /usr/local/bin/klipper_mcu
+    make clean &>/dev/null
+    rm -f .config
+    rm -f /home/pi/klipper_linux.config
+    kill $GAUGE_PID 2>/dev/null || true
+    wait $GAUGE_PID 2>/dev/null || true
+    sleep 1 | "${DIALOG[@]}" --clear --gauge "Klipper MCU compiled successfully ..." "${RESOLUTION[@]}" 55
+else
+    sleep 1 | "${DIALOG[@]}" --clear --gauge "Klipper MCU already installed ..." "${RESOLUTION[@]}" 55
+fi
+
+# Step 4: Generate initramfs
 gen_initramfs
-sleep 1 | "${DIALOG[@]}" --clear --gauge "Generating initramfs ..." "${RESOLUTION[@]}" 60
+sleep 1 | "${DIALOG[@]}" --clear --gauge "Generating initramfs ..." "${RESOLUTION[@]}" 70
 
-# Step 4: Enable KlipperScreen
+# Step 5: Enable KlipperScreen
 enable_ks
-sleep 1 | "${DIALOG[@]}" --clear --gauge "Enabling KlipperScreen ..." "${RESOLUTION[@]}" 80
+sleep 1 | "${DIALOG[@]}" --clear --gauge "Enabling KlipperScreen ..." "${RESOLUTION[@]}" 85
 
-# Step 5: Disable firstboot service
+# Step 6: Disable firstboot service
 disable_firstboot
 sleep 1 | "${DIALOG[@]}" --clear --gauge "Finalizing ..." "${RESOLUTION[@]}" 100
 

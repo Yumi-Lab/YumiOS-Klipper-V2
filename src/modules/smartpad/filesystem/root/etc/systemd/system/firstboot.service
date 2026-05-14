@@ -11,7 +11,7 @@ StandardOutput=tty
 TTYPath=/dev/tty2
 TTYReset=yes
 TTYVHangup=yes
-TimeoutSec=300
+TimeoutSec=600
 
 [Install]
 WantedBy=multi-user.target

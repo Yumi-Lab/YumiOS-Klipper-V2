@@ -18,38 +18,17 @@ source /common.sh
 install_cleanup_trap
 
 
-#Install USB tool for GCODES
 echo_green "Install MCU RPI..."
-#make service
+
+# Install klipper-mcu systemd service
 cd /home/pi/klipper/
 cp /home/pi/klipper/scripts/klipper-mcu.service /etc/systemd/system/
 systemctl_if_exists enable klipper-mcu.service
 
+# klipper_linux.config is deployed via filesystem overlay to /home/pi/
+# Compilation of the Linux MCU happens at first boot (firstboot wizard)
 
-
-# Install new micro-controller code
-echo "Installing micro-controller code to /usr/local/bin/"
-rm -f /usr/local/bin/klipper_mcu
-cp /home/pi/yumi-config/mcu_linux/smart-pi-one//klipper.elf /usr/local/bin/klipper_mcu
-chmod 777 /usr/local/bin/klipper_mcu
-
-
-# Restart (if system install script present)
-if [ -f /etc/init.d/klipper_pru ]; then
-    echo "Attempting host PRU restart..."
-    service klipper_pru restart
-fi
-
-# Restart (if system install script present)
-if [ -f /etc/init.d/klipper_mcu ]; then
-    echo "Attempting host MCU restart..."
-    service klipper_mcu restart
-fi
-
-if [ -f /etc/systemd/system/klipper-mcu.service ]; then
-    echo "Attempting host MCU restart..."
-    systemctl restart klipper-mcu
-fi
+# Add pi to tty group for serial access
 usermod -a -G tty pi
 
 echo_green "Install MCU RPI... [DONE]"
