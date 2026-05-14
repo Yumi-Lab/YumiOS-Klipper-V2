@@ -20,6 +20,9 @@ install_cleanup_trap
 
 echo_green "Install MCU RPI..."
 
+# Deploy klipper_linux.config for firstboot compilation
+unpack /filesystem/home/"${BASE_USER}" /home/"${BASE_USER}" "${BASE_USER}"
+
 # Install klipper-mcu systemd service
 cd /home/pi/klipper/
 cp /home/pi/klipper/scripts/klipper-mcu.service /etc/systemd/system/
