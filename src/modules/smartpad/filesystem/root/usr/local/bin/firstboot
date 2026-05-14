@@ -52,7 +52,9 @@ apply_live_console_rotation() {
         fi
     done
     # Fallback: con2fbmap rotation via echo to each console
-    echo 2 > /sys/module/fbcon/parameters/rotate_all 2>/dev/null || true
+    if [[ -f /sys/module/fbcon/parameters/rotate_all ]]; then
+        echo 2 > /sys/module/fbcon/parameters/rotate_all
+    fi
 }
 
 apply_persistent_rotation() {
@@ -87,8 +89,8 @@ enable_ks() {
 }
 
 disable_firstboot() {
-    systemctl --quiet disable firstboot.service &>/dev/null || true
-    rm -f /etc/systemd/system/firstboot.service &>/dev/null || true
+    systemctl --quiet disable firstboot.service &>/dev/null
+    rm -f /etc/systemd/system/firstboot.service
 }
 
 welcome_msg() {
@@ -124,7 +126,9 @@ if [[ "${ROTATE}" == "1" ]]; then
 fi
 
 # Set large font for readability
-setfont /usr/share/consolefonts/Lat15-TerminusBold20x10.psf.gz 2>/dev/null || true
+if [[ -f /usr/share/consolefonts/Lat15-TerminusBold20x10.psf.gz ]]; then
+    setfont /usr/share/consolefonts/Lat15-TerminusBold20x10.psf.gz
+fi
 
 # === Wizard starts here — console is already in the correct orientation ===
 
@@ -160,8 +164,10 @@ if [[ -f /home/pi/klipper_linux.config ]]; then
     make clean &>/dev/null
     rm -f .config
     rm -f /home/pi/klipper_linux.config
-    kill $GAUGE_PID 2>/dev/null || true
-    wait $GAUGE_PID 2>/dev/null || true
+    if kill -0 $GAUGE_PID 2>/dev/null; then
+        kill $GAUGE_PID
+        wait $GAUGE_PID 2>/dev/null
+    fi
     sleep 1 | "${DIALOG[@]}" --clear --gauge "Klipper MCU compiled successfully ..." "${RESOLUTION[@]}" 55
 else
     sleep 1 | "${DIALOG[@]}" --clear --gauge "Klipper MCU already installed ..." "${RESOLUTION[@]}" 55

@@ -85,7 +85,7 @@ pushd "/home/${BASE_USER}" &>/dev/null || exit 1
 sudo -u "${BASE_USER}" git clone https://github.com/Yumi-Lab/YUMI_SYNC.git
 pushd YUMI_SYNC &>/dev/null || exit 1
 make install
-git checkout . 2>/dev/null || true
+git checkout . 2>/dev/null
 git config --global --add safe.directory "/home/${BASE_USER}/YUMI_SYNC"
 popd &>/dev/null || exit 1
 popd &>/dev/null || exit 1
@@ -197,9 +197,9 @@ else
     echo_green "Headless board — skipping firstboot wizard, enabling KlipperScreen directly"
     # On headless boards, KlipperScreen stays enabled (VNC/remote access)
     # No firstboot wizard needed
-    rm -f /usr/local/bin/firstboot 2>/dev/null || true
-    rm -f /etc/systemd/system/firstboot.service 2>/dev/null || true
-    rm -f /.firstboot 2>/dev/null || true
+    rm -f /usr/local/bin/firstboot
+    rm -f /etc/systemd/system/firstboot.service
+    rm -f /.firstboot
 fi
 
 echo_green "Apply Yumi-Lab specific patches... [ALL DONE]"

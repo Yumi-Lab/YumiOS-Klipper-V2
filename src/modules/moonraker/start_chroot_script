@@ -53,7 +53,7 @@ echo_green "Pre-creating moonraker virtualenv and pre-installing Pillow from piw
 MN_REQ_FILE="/home/${BASE_USER}/moonraker/scripts/moonraker-requirements.txt"
 PILLOW_CONSTRAINT=""
 if [[ -f "${MN_REQ_FILE}" ]]; then
-    PILLOW_CONSTRAINT=$(grep '^pillow' "${MN_REQ_FILE}" | head -n 1 || true)
+    PILLOW_CONSTRAINT=$(grep '^pillow' "${MN_REQ_FILE}" | head -n 1)
 fi
 if [[ -z "${PILLOW_CONSTRAINT}" ]]; then
     PILLOW_CONSTRAINT="pillow>=9.5.0,<=12.1.0"
