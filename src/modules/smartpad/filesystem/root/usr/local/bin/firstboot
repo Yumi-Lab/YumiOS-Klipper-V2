@@ -2,7 +2,9 @@
 #### firstboot actions — YumiOS SmartPad/SmartPi ONE
 ####
 #### Runs once at first boot:
-#### - Applies HDMI rotation (180°) for SmartPad display
+#### - Detects display type (800x480 = SmartPad → rotation 180°)
+#### - Applies console rotation BEFORE showing wizard (correct orientation)
+#### - Configures persistent rotation (armbianEnv.txt + Xorg)
 #### - Enables Plymouth boot logo
 #### - Generates initramfs
 #### - Enables KlipperScreen
@@ -27,36 +29,10 @@ if [[ "$(systemctl is-active KlipperScreen.service 2>/dev/null)" = "active" ]]; 
     systemctl stop KlipperScreen.service &>/dev/null
 fi
 
-welcome_msg() {
-    cat << EOF
-
-Hello dear YUMI user,
-Please be patient, we have to prepare your first start!
-
-    *** DO NOT UNPLUG DEVICE OR DISRUPT THIS PROCESS! ***
-
-Some steps may take several minutes. Stay patient please.
-The device will reboot after exiting ...
-Continuing setup in ...
-EOF
-}
-
-reboot_msg() {
-    cat << EOF
-
-Your device will be restarted in 5 seconds...
-
-Thank you for being patient and have fun with your
-    *** YUMI SmartPad ***
-
-EOF
-}
-
 needs_rotation() {
-    # Detect if HDMI display needs 180° rotation based on resolution.
-    # The original SmartPad 7" LCD is 800x480 and requires rotation
-    # due to connector position. Future screens (different resolution
-    # or rotation done in HDMI chip at factory) don't need it.
+    # The original SmartPad 7" LCD is 800x480 and requires 180° rotation
+    # due to connector position. Future screens with different resolution
+    # or factory-rotated HDMI chip don't need it.
     local resolution
     resolution="$(cat /sys/class/graphics/fb0/virtual_size 2>/dev/null)"
     if [[ "${resolution}" == "800,480" ]]; then
@@ -66,12 +42,22 @@ needs_rotation() {
     fi
 }
 
-apply_hdmi_rotation() {
-    # Rotate HDMI display 180° (fbcon + Xorg + touch)
-    local envfile="/boot/armbianEnv.txt"
+apply_live_console_rotation() {
+    # Rotate the console framebuffer 180° RIGHT NOW (before wizard display)
+    # This makes the wizard appear in the correct orientation
+    for fbcon in /sys/class/graphics/fbcon/rotate_all /sys/class/graphics/fb0/rotate; do
+        if [[ -f "${fbcon}" ]]; then
+            echo 2 > "${fbcon}" 2>/dev/null && return 0
+        fi
+    done
+    # Fallback: con2fbmap rotation via echo to each console
+    echo 2 > /sys/module/fbcon/parameters/rotate_all 2>/dev/null || true
+}
 
+apply_persistent_rotation() {
+    # Write rotation to armbianEnv.txt (applied at next boot)
+    local envfile="/boot/armbianEnv.txt"
     if [[ -f "${envfile}" ]]; then
-        # Add kernel framebuffer rotation (180° = rotate:2)
         if ! grep -q "extraargs=.*fbcon=rotate:2" "${envfile}"; then
             if grep -q "^extraargs=" "${envfile}"; then
                 sed -i 's/^extraargs=\(.*\)/extraargs=\1 fbcon=rotate:2/' "${envfile}"
@@ -104,17 +90,50 @@ disable_firstboot() {
     rm -f /etc/systemd/system/firstboot.service &>/dev/null || true
 }
 
-# Set large font for readability on HDMI display
+welcome_msg() {
+    cat << EOF
+
+Hello dear YUMI user,
+Please be patient, we have to prepare your first start!
+
+    *** DO NOT UNPLUG DEVICE OR DISRUPT THIS PROCESS! ***
+
+Some steps may take several minutes. Stay patient please.
+The device will reboot after exiting ...
+Continuing setup in ...
+EOF
+}
+
+reboot_msg() {
+    cat << EOF
+
+Your device will be restarted in 5 seconds...
+
+Thank you for being patient and have fun with your
+    *** YUMI SmartPad ***
+
+EOF
+}
+
+# === STEP 0: Detect display and apply live rotation BEFORE wizard ===
+ROTATE="$(needs_rotation)"
+if [[ "${ROTATE}" == "1" ]]; then
+    echo "SmartPad 800x480 detected — applying live console rotation..."
+    apply_live_console_rotation
+fi
+
+# Set large font for readability
 setfont /usr/share/consolefonts/Lat15-TerminusBold20x10.psf.gz 2>/dev/null || true
 
-# Welcome msg
+# === Wizard starts here — console is already in the correct orientation ===
+
 "${DIALOG[@]}" --clear --title "YumiOS First Boot" \
     --no-cancel --no-ok --pause "$(welcome_msg)" "${RESOLUTION[@]}" 15
 
-# Step 1: Apply HDMI rotation (only if 800x480 display detected)
-if [[ "$(needs_rotation)" == "1" ]]; then
-    apply_hdmi_rotation
-    sleep 1 | "${DIALOG[@]}" --clear --gauge "Applying display rotation (800x480 detected) ..." "${RESOLUTION[@]}" 20
+# Step 1: Apply persistent rotation (for next boot)
+if [[ "${ROTATE}" == "1" ]]; then
+    apply_persistent_rotation
+    sleep 1 | "${DIALOG[@]}" --clear --gauge "Configuring display rotation (800x480) ..." "${RESOLUTION[@]}" 20
 else
     sleep 1 | "${DIALOG[@]}" --clear --gauge "No rotation needed for this display ..." "${RESOLUTION[@]}" 20
 fi
@@ -125,7 +144,7 @@ if [[ -f /boot/armbianEnv.txt ]]; then
 fi
 sleep 1 | "${DIALOG[@]}" --clear --gauge "Enabling boot logo ..." "${RESOLUTION[@]}" 40
 
-# Step 3: Generate initramfs (includes plymouth + fbcon rotation)
+# Step 3: Generate initramfs
 gen_initramfs
 sleep 1 | "${DIALOG[@]}" --clear --gauge "Generating initramfs ..." "${RESOLUTION[@]}" 60
 
@@ -144,7 +163,7 @@ sleep 1 | "${DIALOG[@]}" --clear --gauge "Finalizing ..." "${RESOLUTION[@]}" 100
 # Cleanup
 rm -f /.firstboot
 
-# Reboot to apply rotation
+# Reboot
 reboot
 
 exit 0
