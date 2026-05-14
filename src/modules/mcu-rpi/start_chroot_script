@@ -23,6 +23,8 @@ echo_green "Install MCU RPI..."
 # Install klipper-mcu systemd service
 cd /home/pi/klipper/
 cp /home/pi/klipper/scripts/klipper-mcu.service /etc/systemd/system/
+# Remove -r (realtime scheduling) flag — not supported on Armbian Trixie kernel 6.18+
+sed -i 's|klipper_mcu -r |klipper_mcu |' /etc/systemd/system/klipper-mcu.service
 systemctl_if_exists enable klipper-mcu.service
 
 # klipper_linux.config is deployed via filesystem overlay to /home/pi/
