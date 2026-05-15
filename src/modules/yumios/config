@@ -10,13 +10,13 @@
 
 #### NOTE:
 #### python3-serial is needed later on for possible CAN adapters
-#### python3-opencv is needed for moonraker-obico by obico in version 2.0
+#### python3-opencv is needed for moonraker-app-yumi-lab
 
 YUMIOS_DEPS_BASE="python3-serial python3-opencv wavemon \
 hexedit tcpdump iptraf mc htop dcfldd nano usbutils ranger ncdu \
 can-utils multitail fd-find lsof minicom"
 
-# janus: handled by moonraker-yumi-lab ensure_janus.sh (apt or .deb)
+# janus: handled by moonraker-app-yumi-lab ensure_janus.sh (apt or .deb)
 # tldr → tealdeer on Trixie (same tool, Rust implementation)
 if [[ "${BASE_OS_CODENAME}" == "trixie" ]]; then
     [ -n "$YUMIOS_DEPS" ] || YUMIOS_DEPS="${YUMIOS_DEPS_BASE} tealdeer"
