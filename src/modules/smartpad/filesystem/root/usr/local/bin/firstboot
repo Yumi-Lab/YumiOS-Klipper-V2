@@ -154,6 +154,7 @@ if [[ -f /home/pi/klipper_linux.config ]]; then
     "${DIALOG[@]}" --clear --gauge "Compiling Klipper MCU for GPIO ..." "${RESOLUTION[@]}" 50 &
     GAUGE_PID=$!
     cd /home/pi/klipper
+    git config --global --add safe.directory /home/pi/klipper
     make clean &>/dev/null
     cp /home/pi/klipper_linux.config .config
     make olddefconfig &>/dev/null
