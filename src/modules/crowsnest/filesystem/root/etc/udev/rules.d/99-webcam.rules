@@ -1,0 +1,3 @@
+# Create /dev/webcamN symlinks for USB cameras (capture devices only)
+# First USB cam = /dev/webcam0, second = /dev/webcam1, etc.
+SUBSYSTEM=="video4linux", ATTR{index}=="0", ENV{ID_BUS}=="usb", PROGRAM="/usr/local/bin/webcam-enumerate.sh %k", SYMLINK+="%c"
