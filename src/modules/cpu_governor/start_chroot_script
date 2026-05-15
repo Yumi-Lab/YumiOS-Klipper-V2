@@ -12,11 +12,12 @@ install_cleanup_trap
 
 echo_green "Setting CPU governor to userspace..."
 
-if [[ -f /etc/default/cpufrequtils ]]; then
-    sed -i 's/^GOVERNOR=.*/GOVERNOR=userspace/' /etc/default/cpufrequtils
-else
-    echo "GOVERNOR=userspace" > /etc/default/cpufrequtils
-fi
+cat > /etc/default/cpufrequtils << 'CPUCONF'
+ENABLE=true
+MIN_SPEED=960000
+MAX_SPEED=960000
+GOVERNOR=userspace
+CPUCONF
 
 # Clean up old custom service and script if present
 rm -f /etc/systemd/system/set-cpu-freq.service
