@@ -62,7 +62,7 @@ install_plymouth_theme() {
     local src dest
     dest="/usr/share/plymouth/themes/"
     src="/home/${BASE_USER}/$(basename "${SMARTPAD_PLYMOUTH_REPO/.git/}")"
-    src="${src}/pack_2/hexagon_alt"
+    src="${src}/${SMARTPAD_PLYMOUTH_PACK}/${SMARTPAD_PLYMOUTH_THEME}"
     if [[ -d "${src}" ]]; then
         cp -r "${src}" "${dest}"
         plymouth-set-default-theme "${SMARTPAD_PLYMOUTH_THEME}"
