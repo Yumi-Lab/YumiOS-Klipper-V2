@@ -67,7 +67,8 @@ popd &> /dev/null || exit 1
 
 ## Step 8: Patch service to wait for network (USB WiFi dongle needs time to enumerate)
 if [[ -f /etc/systemd/system/KlipperScreen.service ]]; then
-    sed -i '/^After=.*moonraker.service/a After=NetworkManager.service network-online.target\nWants=network-online.target' /etc/systemd/system/KlipperScreen.service
+    sed -i '/^After=.*moonraker.service/a After=NetworkManager.service network-online.target' /etc/systemd/system/KlipperScreen.service
+    sed -i '/^After=.*network-online.target/a Wants=network-online.target' /etc/systemd/system/KlipperScreen.service
 fi
 
 ## Step 9: Enable service
