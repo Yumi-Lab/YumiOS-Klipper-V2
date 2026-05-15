@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-#### CPU Governor — fix frequency at 912MHz for Klipper stability
+#### CPU Governor — set to userspace for Klipper stability
 ####
-#### Sets CPU governor to 'userspace' at fixed 912MHz on all cores.
 #### Dynamic frequency scaling causes Klipper USB/MCU disconnections.
+#### Use Armbian's native /etc/default/cpufrequtils to lock governor.
 ####
 
 # shellcheck enable=require-variable-braces
@@ -10,51 +10,16 @@
 source /common.sh
 install_cleanup_trap
 
-echo_green "Setting CPU governor to userspace at 912MHz..."
+echo_green "Setting CPU governor to userspace..."
 
-cat << 'EOF' > /usr/local/bin/set_cpu_freq.sh
-#!/bin/bash
-# Target ~912MHz but pick the closest available frequency
-TARGET=912000
-AVAIL=$(cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_available_frequencies 2>/dev/null)
-if [ -z "$AVAIL" ]; then
-    echo "No available frequencies found, skipping"
-    exit 0
+if [[ -f /etc/default/cpufrequtils ]]; then
+    sed -i 's/^GOVERNOR=.*/GOVERNOR=userspace/' /etc/default/cpufrequtils
+else
+    echo "GOVERNOR=userspace" > /etc/default/cpufrequtils
 fi
-# Find closest frequency to target
-BEST=""
-BEST_DIFF=999999999
-for F in $AVAIL; do
-    DIFF=$(( F > TARGET ? F - TARGET : TARGET - F ))
-    if [ "$DIFF" -lt "$BEST_DIFF" ]; then
-        BEST_DIFF=$DIFF
-        BEST=$F
-    fi
-done
-echo "Setting CPU to userspace at ${BEST} Hz (closest to ${TARGET})"
-for CPU in /sys/devices/system/cpu/cpu*/cpufreq; do
-    echo userspace > "${CPU}/scaling_governor"
-    echo "$BEST" > "${CPU}/scaling_setspeed"
-done
-EOF
 
-chmod +x /usr/local/bin/set_cpu_freq.sh
+# Clean up old custom service and script if present
+rm -f /etc/systemd/system/set-cpu-freq.service
+rm -f /usr/local/bin/set_cpu_freq.sh
 
-cat << 'EOF' > /etc/systemd/system/set-cpu-freq.service
-[Unit]
-Description=Set CPU governor to userspace at 912MHz (Klipper stability)
-After=sysinit.target
-Before=klipper.service moonraker.service
-
-[Service]
-Type=oneshot
-ExecStart=/usr/local/bin/set_cpu_freq.sh
-RemainAfterExit=yes
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-systemctl_if_exists enable set-cpu-freq.service
-
-echo_green "CPU governor set to userspace at 912MHz ... [DONE]"
+echo_green "CPU governor set to userspace ... [DONE]"
