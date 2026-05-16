@@ -154,7 +154,7 @@ if [[ -f /home/pi/klipper_linux.config ]]; then
     "${DIALOG[@]}" --clear --gauge "Compiling Klipper MCU for GPIO ..." "${RESOLUTION[@]}" 50 &
     GAUGE_PID=$!
     cd /home/pi/klipper
-    HOME=/root git config --global --add safe.directory /home/pi/klipper
+    git config --global --add safe.directory /home/pi/klipper
     make clean &>/dev/null
     cp /home/pi/klipper_linux.config .config
     make olddefconfig &>/dev/null
@@ -167,9 +167,8 @@ if [[ -f /home/pi/klipper_linux.config ]]; then
     rm -f /home/pi/klipper_linux.config
     if kill -0 $GAUGE_PID 2>/dev/null; then
         kill $GAUGE_PID
+        wait $GAUGE_PID 2>/dev/null
     fi
-    # wait returns the killed process exit code — capture it to avoid set -e crash
-    wait $GAUGE_PID 2>/dev/null || :
     sleep 1 | "${DIALOG[@]}" --clear --gauge "Klipper MCU compiled successfully ..." "${RESOLUTION[@]}" 55
 else
     sleep 1 | "${DIALOG[@]}" --clear --gauge "Klipper MCU already installed ..." "${RESOLUTION[@]}" 55
