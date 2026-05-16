@@ -167,8 +167,9 @@ if [[ -f /home/pi/klipper_linux.config ]]; then
     rm -f /home/pi/klipper_linux.config
     if kill -0 $GAUGE_PID 2>/dev/null; then
         kill $GAUGE_PID
-        wait $GAUGE_PID 2>/dev/null
     fi
+    # wait returns the killed process exit code — capture to avoid set -e crash
+    wait $GAUGE_PID 2>/dev/null || :
     sleep 1 | "${DIALOG[@]}" --clear --gauge "Klipper MCU compiled successfully ..." "${RESOLUTION[@]}" 55
 else
     sleep 1 | "${DIALOG[@]}" --clear --gauge "Klipper MCU already installed ..." "${RESOLUTION[@]}" 55
