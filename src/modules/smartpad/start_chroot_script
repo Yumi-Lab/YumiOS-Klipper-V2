@@ -90,12 +90,12 @@ popd &>/dev/null || exit 1
 chown -R "${BASE_USER}:${BASE_USER}" "/home/${BASE_USER}/YUMI_SYNC"
 echo_green "Install YUMI_SYNC ... [DONE]"
 
-## Step 5: moonraker-yumi-lab plugin
-echo_green "Install moonraker-yumi-lab ..."
+## Step 5: moonraker-app-yumi-lab plugin
+echo_green "Install moonraker-app-yumi-lab ..."
 pushd "/home/${BASE_USER}" &>/dev/null || exit 1
 unpack /filesystem/home/"${BASE_USER}" /home/"${BASE_USER}" "${BASE_USER}"
-sudo -u "${BASE_USER}" git clone https://github.com/Yumi-Lab/moonraker-yumi-lab.git
-pushd moonraker-yumi-lab &>/dev/null || exit 1
+sudo -u "${BASE_USER}" git clone https://github.com/Yumi-Lab/moonraker-app-yumi-lab.git
+pushd moonraker-app-yumi-lab &>/dev/null || exit 1
 chmod +x ./install.sh
 sudo -u "${BASE_USER}" ./install.sh \
     -C "/home/${BASE_USER}/printer_data/config/moonraker.conf" \
@@ -104,8 +104,8 @@ sudo -u "${BASE_USER}" ./install.sh \
     -L -S "https://app.yumi-lab.com"
 popd &>/dev/null || exit 1
 popd &>/dev/null || exit 1
-# moonraker-obico-update.cfg is created by install.sh — keep it as-is (V1 behavior)
-echo_green "Install moonraker-yumi-lab ... [DONE]"
+# moonraker-yumi-update.cfg is created by install.sh
+echo_green "Install moonraker-app-yumi-lab ... [DONE]"
 
 ## Step 6: yumi-config install script
 echo_green "Install yumi-config ..."
