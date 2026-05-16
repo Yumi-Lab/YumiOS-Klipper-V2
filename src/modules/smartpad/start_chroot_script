@@ -54,6 +54,15 @@ echo "overlays=spi-spidev uart1 uart2" >> "${SMARTPAD_CONFIG_TXT_FILE}"
 echo "param_spidev_spi_bus=1" >> "${SMARTPAD_CONFIG_TXT_FILE}"
 echo_green "Enable Serial and SPI interface... DONE!"
 
+## Step 2b: Disable USB autosuspend (prevents WiFi dongle from dying after reboot)
+echo_green "Disable USB autosuspend in kernel args..."
+if grep -q "^extraargs=" "${SMARTPAD_CONFIG_TXT_FILE}"; then
+    sed -i 's/^extraargs=\(.*\)/extraargs=\1 usbcore.autosuspend=-1/' "${SMARTPAD_CONFIG_TXT_FILE}"
+else
+    echo "extraargs=usbcore.autosuspend=-1" >> "${SMARTPAD_CONFIG_TXT_FILE}"
+fi
+echo_green "Disable USB autosuspend... DONE!"
+
 ## Step 3: Plymouth boot theme
 echo_green "Install Yumi Lab Plymouth theme..."
 pushd "/home/${BASE_USER}" &>/dev/null || exit 1

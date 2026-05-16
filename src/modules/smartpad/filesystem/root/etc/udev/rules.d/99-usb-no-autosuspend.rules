@@ -1,0 +1,3 @@
+# Disable USB autosuspend for all USB devices
+# Prevents WiFi dongles (RTL8188EUS etc.) from failing to re-enumerate after reboot
+ACTION=="add", SUBSYSTEM=="usb", ATTR{power/control}="on"
