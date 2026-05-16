@@ -151,8 +151,7 @@ sleep 1 | "${DIALOG[@]}" --clear --gauge "Enabling boot logo ..." "${RESOLUTION[
 
 # Step 3: Compile Klipper Linux MCU (native to current distro)
 if [[ -f /home/pi/klipper_linux.config ]]; then
-    "${DIALOG[@]}" --clear --gauge "Compiling Klipper MCU for GPIO ..." "${RESOLUTION[@]}" 50 &
-    GAUGE_PID=$!
+    "${DIALOG[@]}" --clear --infobox "Compiling Klipper MCU for GPIO...\n\nThis may take a few minutes.\nPlease wait..." "${RESOLUTION[@]}"
     cd /home/pi/klipper
     git config --system --add safe.directory /home/pi/klipper
     make clean &>/dev/null
@@ -165,11 +164,6 @@ if [[ -f /home/pi/klipper_linux.config ]]; then
     make clean &>/dev/null
     rm -f .config
     rm -f /home/pi/klipper_linux.config
-    if kill -0 $GAUGE_PID 2>/dev/null; then
-        kill $GAUGE_PID
-    fi
-    # wait returns the killed process exit code — capture to avoid set -e crash
-    wait $GAUGE_PID 2>/dev/null || :
     sleep 1 | "${DIALOG[@]}" --clear --gauge "Klipper MCU compiled successfully ..." "${RESOLUTION[@]}" 55
 else
     sleep 1 | "${DIALOG[@]}" --clear --gauge "Klipper MCU already installed ..." "${RESOLUTION[@]}" 55
