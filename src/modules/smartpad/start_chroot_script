@@ -186,7 +186,7 @@ echo_green "Install fix-webcam service ... [DONE]"
 ## Step 10: Moonraker allowed services
 echo_green "Configure moonraker allowed services ..."
 FILE="/home/${BASE_USER}/printer_data/moonraker.asvc"
-SERVICES=("KlipperScreen" "yumi_sync" "crowsnest")
+SERVICES=("KlipperScreen" "yumi_sync" "crowsnest" "moonraker-app-yumi-lab")
 
 for SERVICE in "${SERVICES[@]}"; do
     grep -qxF "${SERVICE}" "${FILE}" 2>/dev/null || echo "${SERVICE}" >> "${FILE}"
