@@ -95,6 +95,7 @@ popd &> /dev/null || exit 1
 echo_green "Deploy webcam udev rules ..."
 unpack /filesystem/root /
 chmod +x /usr/local/bin/webcam-enumerate.sh
+chmod +x /usr/local/bin/crowsnest-hotplug.sh
 
 ## Step 13:
 echo_green "Enable crowsnest.service ..."
