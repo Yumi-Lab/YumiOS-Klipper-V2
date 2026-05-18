@@ -2,8 +2,7 @@ name: Build Image
 on:
   push:
     branches:
-      - "develop"
-      - "master"
+      - "main"
     paths:
       - "src/modules/**"
       - "src/build_dist"
