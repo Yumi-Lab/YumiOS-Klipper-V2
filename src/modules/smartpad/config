@@ -4,5 +4,8 @@
 
 [[ -n "$SMARTPAD_CONFIG_TXT_FILE" ]] || SMARTPAD_CONFIG_TXT_FILE="/boot/armbianEnv.txt"
 [[ -n "$SMARTPAD_PLYMOUTH_REPO" ]] || SMARTPAD_PLYMOUTH_REPO="https://github.com/Yumi-Lab/plymouth-themes.git"
-[[ -n "$SMARTPAD_PLYMOUTH_THEME" ]] || SMARTPAD_PLYMOUTH_THEME="hexagon_alt"
+# Plymouth boot theme — path relative to repo root
+# two-step themes (fast, compiled C plugin): pack_yumi/yumi-klipper, pack_yumi/retromi
+# script themes (slower, interpreted): pack_1/*, pack_2/hexagon_alt, pack_3/*, pack_4/*
+[[ -n "$SMARTPAD_PLYMOUTH_THEME" ]] || SMARTPAD_PLYMOUTH_THEME="pack_yumi/yumi-klipper"
 [[ -n "$SMARTPAD_DEPS" ]] || SMARTPAD_DEPS="plymouth dialog v4l-utils console-setup keyboard-configuration kbd"
