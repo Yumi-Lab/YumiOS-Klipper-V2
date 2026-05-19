@@ -73,10 +73,12 @@ jobs:
         shell: bash
         run: |
           source repository/src/config
+          source repository/config/default
+          source "repository/config/armbian/${{ matrix.config.sbc }}"
           NOW="$(date +"%Y-%m-%d-%H%M")"
           IMAGE="${DIST_NAME}-${DIST_VERSION}-${{ steps.build.outputs.sbc }}-${BASE_OS_CODENAME}-${BASE_OS_VERSION}-${NOW}"
 
-          sudo mv repository/src/workspace/*.img $IMAGE.img
+          sudo mv repository/src/workspace/*.img "./$IMAGE.img"
 
           echo "image=${IMAGE}" >> $GITHUB_OUTPUT
 
