@@ -74,7 +74,7 @@ jobs:
         run: |
           source repository/src/config
           source repository/config/default
-          source "repository/config/armbian/${{ matrix.config.sbc }}"
+          source "repository/config/${{ matrix.config }}"
           NOW="$(date +"%Y-%m-%d-%H%M")"
           IMAGE="${DIST_NAME}-${DIST_VERSION}-${{ steps.build.outputs.sbc }}-${BASE_OS_CODENAME}-${BASE_OS_VERSION}-${NOW}"
 
