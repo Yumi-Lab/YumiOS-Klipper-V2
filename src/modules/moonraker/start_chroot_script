@@ -77,21 +77,34 @@ sudo -u "${BASE_USER}" "/home/${BASE_USER}/moonraker-env/bin/pip" install --upgr
 
 mkdir -p /tmp/piwheels
 echo_green "Downloading precompiled Pillow wheel: ${WHEEL_NAME} ..."
-if ! curl -fsSL -o "/tmp/piwheels/${WHEEL_NAME}" "${WHEEL_URL}"; then
-    echo_red "Failed to download Pillow wheel from piwheels (${WHEEL_URL})"
-    exit 1
+PILLOW_DL_OK=0
+for attempt in 1 2 3 4 5; do
+    if curl -fsSL --retry 3 --retry-delay 5 -o "/tmp/piwheels/${WHEEL_NAME}" "${WHEEL_URL}"; then
+        PILLOW_DL_OK=1
+        break
+    fi
+    echo_yellow "Pillow download attempt ${attempt}/5 failed, retrying in 10s ..."
+    sleep 10
+done
+if [[ "${PILLOW_DL_OK}" -eq 1 ]]; then
+    sudo -u "${BASE_USER}" "/home/${BASE_USER}/moonraker-env/bin/pip" install "/tmp/piwheels/${WHEEL_NAME}"
+    # Create constraints file to pin Pillow version and prevent reinstall
+    echo "pillow==${PILLOW_VERSION}" > /tmp/pillow-constraints.txt
+else
+    echo_red "Failed to download Pillow wheel from piwheels after 5 attempts (${WHEEL_URL})"
+    echo_yellow "Skipping pre-install — moonraker install script will build Pillow from source (slower)"
 fi
-sudo -u "${BASE_USER}" "/home/${BASE_USER}/moonraker-env/bin/pip" install "/tmp/piwheels/${WHEEL_NAME}"
-
-# Create constraints file to pin Pillow version and prevent reinstall
-echo "pillow==${PILLOW_VERSION}" > /tmp/pillow-constraints.txt
 
 ## Step 7: Move to moonraker as working directory
 pushd "/home/${BASE_USER}/moonraker" &> /dev/null || exit 1
 
 ## Step 8: Run moonraker install routine
 echo_green "Launch moonraker install routine ..."
-sudo -u "${BASE_USER}" TMPDIR="/home/${BASE_USER}/tmp" PIP_CONSTRAINT="/tmp/pillow-constraints.txt" ./scripts/install-moonraker.sh -s -z -x
+MOONRAKER_ENV="TMPDIR=/home/${BASE_USER}/tmp"
+if [[ -f /tmp/pillow-constraints.txt ]]; then
+    MOONRAKER_ENV="${MOONRAKER_ENV} PIP_CONSTRAINT=/tmp/pillow-constraints.txt"
+fi
+sudo -u "${BASE_USER}" env ${MOONRAKER_ENV} ./scripts/install-moonraker.sh -s -z -x
 
 ## Step 9: Install policykit rules
 echo_green "Install moonrakers PolicyKit Rules ..."

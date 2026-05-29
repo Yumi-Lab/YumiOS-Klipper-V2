@@ -17,11 +17,7 @@ mkdir -p /tmp
 chmod 1777 /tmp
 
 # Module only Variables
-#SR_BUILD_INSTALL_SH="/home/pi/sonar/tools/install.sh"
 SR_BUILD_PACKAGE_FILE="/tmp/sr_packages.lst"
-#SONAR_CONFIG_PATH=/etc/sonar
-#SONAR_LOG_PATH=/var/log/sonar
-#SONAR_SYSTEMD_PATH=/etc/systemd/system
 
 echo_green "Installing sonar ..."
 
@@ -37,60 +33,80 @@ pushd "/home/${BASE_USER}" &> /dev/null || exit 1
 echo_green "Clone sonar repository ..."
 gitclone SONAR_REPO sonar
 
-## Step 3-5: Set SONAR_DEPS manually (bypass dynamic detection)
+## Step 3: Set SONAR_DEPS manually
 echo_green "Manually defining SONAR_DEPS ..."
 SONAR_DEPS="network-manager wireless-tools iw ethtool curl net-tools"
 
-## Step 6: Install packages
+## Step 4: Install packages
 echo_green "Install sonar dependencies ..."
 # shellcheck disable=SC2086
 check_install_pkgs ${SONAR_DEPS}
 
-## Step 7: Move to sonar as working directory
+## Step 5: Move to sonar as working directory
 pushd "/home/${BASE_USER}/sonar" &> /dev/null || exit 1
 
-## Step 8: Run sonar install routine
+## Step 6: Run sonar install routine
 echo_green "Launch sonar install routine ..."
-ls -la /home/"${BASE_USER}"/sonar
-cat /home/"${BASE_USER}"/sonar/tools/install.sh || echo ">> install.sh not found"
 make install || { echo_red "Sonar install failed"; exit 1; }
 
-## >>> MODIFICATIONS : Script wifi_checker.py + service <<<
-echo_green "Copie du script wifi_checker.py ..."
-cp /home/"${BASE_USER}"/wifi_checker.py /usr/local/bin/
-chmod +x /usr/local/bin/wifi_checker.py
-
-echo_green "Creating wifi-checker service ..."
-cat <<EOF > /etc/systemd/system/wifi-checker.service
-[Unit]
-Description=WiFi Checker Script
-After=network.target
-
-[Service]
-ExecStart=/usr/local/bin/wifi_checker.py
-Restart=always
-User=${BASE_USER}
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-systemctl daemon-reexec
-systemctl daemon-reload
-systemctl enable wifi-checker.service
-systemctl start wifi-checker.service
-## <<< FIN DES MODIFICATIONS <<<
-
-## Step 9: Leave sonar
+## Step 7: Leave sonar
 popd &> /dev/null || exit 1
 
-## Step 10: clean packages.lst file
+## Step 8: Override sonar.conf — enable + tuned for NetworkManager
+echo_green "Writing sonar.conf (enabled, 30s interval) ..."
+cat <<'SONAREOF' > "/home/${BASE_USER}/printer_data/config/sonar.conf"
+[sonar]
+enable: true
+debug_log: false
+persistent_log: false
+target: auto
+count: 3
+interval: 30
+restart_threshold: 5
+SONAREOF
+chown "${BASE_USER}:${BASE_USER}" "/home/${BASE_USER}/printer_data/config/sonar.conf"
+
+## Step 9: NetworkManager WiFi auto-reconnect dispatcher
+echo_green "Installing NetworkManager WiFi reconnect dispatcher ..."
+cat <<'DISPEOF' > /etc/NetworkManager/dispatcher.d/99-wifi-reconnect
+#!/usr/bin/env bash
+# Reconnect WiFi automatically when connection drops
+# Triggered by NetworkManager on interface state changes
+
+IFACE="$1"
+ACTION="$2"
+
+# Only act on WiFi interfaces going down
+case "$IFACE" in wlan*|wlp*) ;; *) exit 0 ;; esac
+
+if [ "$ACTION" = "down" ]; then
+    logger -t wifi-reconnect "WiFi $IFACE went down, scheduling reconnect ..."
+    # Wait a bit then ask NM to re-activate
+    (
+        sleep 5
+        nmcli device connect "$IFACE" 2>/dev/null \
+            || nmcli networking off && sleep 2 && nmcli networking on
+        logger -t wifi-reconnect "WiFi reconnect attempt done for $IFACE"
+    ) &
+fi
+DISPEOF
+chmod 755 /etc/NetworkManager/dispatcher.d/99-wifi-reconnect
+
+## Step 10: Force autoconnect on all future WiFi connections
+echo_green "Configuring NetworkManager autoconnect ..."
+cat <<'NMEOF' > /etc/NetworkManager/conf.d/wifi-autoconnect.conf
+[connection]
+# Retry WiFi connection indefinitely (0 = infinite retries)
+connection.autoconnect-retries=0
+NMEOF
+
+## Step 11: clean packages.lst file
 rm -f "${SR_BUILD_PACKAGE_FILE}"
 
-## Step 11: leave home dir
+## Step 12: leave home dir
 popd &> /dev/null || exit 1
 
-## Step 12:
+## Step 13: Enable sonar service
 echo_green "Enable sonar.service ..."
 systemctl_if_exists enable sonar.service
 
