@@ -24,7 +24,8 @@ git config --global --add safe.directory "${YMS_MANAGER_DIR}"
 chown -R "${BASE_USER}:${BASE_USER}" "${YMS_MANAGER_DIR}"
 
 ## Run installer (creates symlinks to Klipper extras + patches Mainsail + adds Moonraker update manager)
-sudo -u "${BASE_USER}" bash -c "cd ${YMS_MANAGER_DIR} && ./install.sh"
+## HOME must be set explicitly — sudo -u does not load the user profile
+sudo -u "${BASE_USER}" HOME="/home/${BASE_USER}" bash -c "cd ${YMS_MANAGER_DIR} && ./install.sh"
 
 popd &>/dev/null || exit 1
 
