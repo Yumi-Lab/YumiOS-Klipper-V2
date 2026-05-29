@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+#### Yumi-YMS-Manager module
+####
+#### https://github.com/Yumi-Lab/Yumi-YMS-Manager
+####
+
+# shellcheck disable=all
+
+[ -n "$YMS_MANAGER_REPO_SHIP" ] || YMS_MANAGER_REPO_SHIP="https://github.com/Yumi-Lab/Yumi-YMS-Manager.git"
+[ -n "$YMS_MANAGER_REPO_BRANCH" ] || YMS_MANAGER_REPO_BRANCH="main"
+[ -n "$YMS_MANAGER_DIR" ] || YMS_MANAGER_DIR="/home/${BASE_USER}/Yumi-YMS-Manager"

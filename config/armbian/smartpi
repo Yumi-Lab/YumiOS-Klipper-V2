@@ -18,7 +18,7 @@ BASE_OS_CODENAME="bookworm"
 BASE_OS_VERSION="debian12"
 
 # Modules — YumiOS Klipper stack for SmartPi One
-MODULES="base(udev_fix,armbian(armbian_net,yumios,klipper,is_req_preinstall,moonraker,mainsail,timelapse,klipperscreen,crowsnest,usb-automount,cpu_governor,mcu-rpi,tmc-autotune,smartpad))"
+MODULES="base(udev_fix,armbian(armbian_net,yumios,klipper,is_req_preinstall,moonraker,mainsail,timelapse,klipperscreen,crowsnest,usb-automount,cpu_governor,mcu-rpi,tmc-autotune,yms-manager,smartpad))"
 
 export BASE_ARCH
 export BASE_IMAGE_ENLARGEROOT

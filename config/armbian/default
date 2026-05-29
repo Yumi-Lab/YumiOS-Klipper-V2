@@ -25,7 +25,7 @@ BASE_BOOT_MOUNT_PATH="/boot/"
 # Compress not needed due compression done in workflow
 BASE_RELEASE_COMPRESS=no
 # Modules are valid for 32bit and 64bit images
-MODULES="base(udev_fix,armbian(armbian_net,yumios,klipper,is_req_preinstall,moonraker,mainsail,timelapse,klipperscreen,crowsnest,usb-automount,cpu_governor,mcu-rpi,tmc-autotune))"
+MODULES="base(udev_fix,armbian(armbian_net,yumios,klipper,is_req_preinstall,moonraker,mainsail,timelapse,klipperscreen,crowsnest,usb-automount,cpu_governor,mcu-rpi,tmc-autotune,yms-manager))"
 
 # export Variables
 export DOWNLOAD_BASE_URL
