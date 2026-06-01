@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+#### Yumi_ANC module — Active Noise Canceling / acoustic resonance avoidance
+####
+#### https://github.com/Yumi-Lab/Yumi_ANC
+####
+#### Uses the SmartPad built-in microphone (H3 analog codec, MIC1) to detect
+#### chassis resonance at cruise speeds and generate avoidance zones.
+
+# shellcheck disable=all
+
+# Audio stack dependencies (not handled by the repo install.sh)
+[ -n "$ACOUSTIC_CAL_DEPS" ] || ACOUSTIC_CAL_DEPS="python3-sounddevice python3-scipy libportaudio2 alsa-utils"
+
+# Remote repo holding the Klipper extra, sweep script, macros and web viewer
+[ -n "$YUMI_ANC_REPO_SHIP" ] || YUMI_ANC_REPO_SHIP="https://github.com/Yumi-Lab/Yumi_ANC.git"
+[ -n "$YUMI_ANC_REPO_BRANCH" ] || YUMI_ANC_REPO_BRANCH="main"
+[ -n "$YUMI_ANC_DIR" ] || YUMI_ANC_DIR="/home/${BASE_USER}/Yumi_ANC"

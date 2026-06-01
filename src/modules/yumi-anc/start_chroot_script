@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+#### Yumi_ANC module — Active Noise Canceling / acoustic resonance avoidance
+####
+#### https://github.com/Yumi-Lab/Yumi_ANC
+####
+#### Uses the SmartPad built-in microphone (H3 analog codec, MIC1) to detect
+#### chassis resonance at cruise speeds and generate avoidance zones.
+####
+#### This module MUST run after klipper, mainsail and moonraker so the repo
+#### install.sh can link the Klipper extra, patch Mainsail and register the
+#### Moonraker update manager.
+
+# shellcheck enable=require-variable-braces
+set -Ee
+
+# Source CustomPIOS common.sh
+# shellcheck disable=SC1091
+source /common.sh
+install_cleanup_trap
+
+echo_green "Installing Yumi_ANC ..."
+
+## Step 1: audio stack dependencies
+# shellcheck disable=SC2086
+check_install_pkgs ${ACOUSTIC_CAL_DEPS}
+
+## Step 2: enable the H3 analog codec overlay (MIC1 on the SmartPad PCB)
+ARMBIAN_ENV="/boot/armbianEnv.txt"
+if [[ -f "${ARMBIAN_ENV}" ]]; then
+    if ! grep -q "analog-codec" "${ARMBIAN_ENV}"; then
+        sed -i 's/^overlays=\(.*\)/overlays=\1 analog-codec/' "${ARMBIAN_ENV}"
+        echo_green "Added analog-codec overlay to armbianEnv.txt"
+    else
+        echo_green "analog-codec overlay already present"
+    fi
+fi
+
+## Step 3: clone the repo (owned by BASE_USER so Moonraker can update it live)
+pushd "/home/${BASE_USER}" &>/dev/null || exit 1
+sudo -u "${BASE_USER}" \
+    git clone --depth 1 -b "${YUMI_ANC_REPO_BRANCH}" "${YUMI_ANC_REPO_SHIP}" "${YUMI_ANC_DIR}"
+git config --global --add safe.directory "${YUMI_ANC_DIR}"
+chown -R "${BASE_USER}:${BASE_USER}" "${YUMI_ANC_DIR}"
+
+## Step 4: run the installer.
+## The repo install.sh has a dedicated chroot path triggered by SUDO_USER=runner
+## which targets /home/pi and chowns to pi — exactly what we need in the build.
+SUDO_USER=runner bash -c "cd ${YUMI_ANC_DIR} && ./install.sh"
+chown -R "${BASE_USER}:${BASE_USER}" "${YUMI_ANC_DIR}"
+
+popd &>/dev/null || exit 1
+
+echo_green "Installing Yumi_ANC ... [DONE]"
