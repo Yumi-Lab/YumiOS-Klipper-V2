@@ -74,6 +74,37 @@ dongle_recovery_threshold: 3
 SONAREOF
 chown "${BASE_USER}:${BASE_USER}" "/home/${BASE_USER}/printer_data/config/sonar.conf"
 
+## Step 8b: Point the update_manager entry at OUR fork so OTA works.
+## We clone Yumi-Lab/sonar, but upstream's moonraker_update.txt hardcodes
+## mainsail-crew/sonar.git as origin. Moonraker compares that origin to the
+## repo's real remote, sees a mismatch, marks the repo invalid and shows
+## neither the service nor an update in Mainsail. Repoint it (idempotent),
+## and add the entry ourselves if it is missing entirely.
+echo_green "Pointing sonar update_manager to Yumi-Lab fork ..."
+MR_CONF="/home/${BASE_USER}/printer_data/config/moonraker.conf"
+if [ -f "${MR_CONF}" ]; then
+  if grep -q "mainsail-crew/sonar.git" "${MR_CONF}"; then
+    sed -i 's#https://github.com/mainsail-crew/sonar.git#https://github.com/Yumi-Lab/sonar.git#g' "${MR_CONF}"
+    echo_green "  origin repointed to Yumi-Lab/sonar."
+  elif ! grep -q "\[update_manager sonar\]" "${MR_CONF}"; then
+    cat <<'MREOF' >> "${MR_CONF}"
+
+[update_manager sonar]
+type: git_repo
+path: ~/sonar
+origin: https://github.com/Yumi-Lab/sonar.git
+primary_branch: main
+managed_services: sonar
+MREOF
+    chown "${BASE_USER}:${BASE_USER}" "${MR_CONF}"
+    echo_green "  update_manager entry added (Yumi-Lab/sonar)."
+  else
+    echo_green "  update_manager entry already correct."
+  fi
+else
+  echo_red "  moonraker.conf not found — update_manager entry skipped."
+fi
+
 ## Step 9: NetworkManager WiFi auto-reconnect dispatcher
 echo_green "Installing NetworkManager WiFi reconnect dispatcher ..."
 cat <<'DISPEOF' > /etc/NetworkManager/dispatcher.d/99-wifi-reconnect
