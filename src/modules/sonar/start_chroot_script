@@ -35,7 +35,7 @@ gitclone SONAR_REPO sonar
 
 ## Step 3: Set SONAR_DEPS manually
 echo_green "Manually defining SONAR_DEPS ..."
-SONAR_DEPS="network-manager wireless-tools iw ethtool curl net-tools"
+SONAR_DEPS="network-manager wireless-tools iw rfkill ethtool curl net-tools"
 
 ## Step 4: Install packages
 echo_green "Install sonar dependencies ..."
@@ -51,6 +51,10 @@ pushd "/home/${BASE_USER}/sonar" &> /dev/null || exit 1
 ## create_filestructure() only makes config/ and logs/, NOT systemd/ — so create it ourselves.
 echo_green "Launch sonar install routine ..."
 export SONAR_DATA_PATH="/home/${BASE_USER}/printer_data"
+## Do NOT let upstream's installer add the update_manager entry: it hardcodes
+## mainsail-crew/sonar.git as origin, which mismatches our fork clone and makes
+## Moonraker invalidate the repo. We add the correct entry ourselves in Step 8b.
+export SONAR_ADD_SONAR_MOONRAKER=0
 mkdir -p "${SONAR_DATA_PATH}/systemd"
 chown -R "${BASE_USER}:${BASE_USER}" "${SONAR_DATA_PATH}/systemd"
 make install || { echo_red "Sonar install failed"; exit 1; }
@@ -71,6 +75,9 @@ interval: 30
 restart_threshold: 5
 dongle_recovery: true
 dongle_recovery_threshold: 3
+tcp_fallback: true
+tcp_check_host: 1.1.1.1
+tcp_check_port: 443
 SONAREOF
 chown "${BASE_USER}:${BASE_USER}" "/home/${BASE_USER}/printer_data/config/sonar.conf"
 
