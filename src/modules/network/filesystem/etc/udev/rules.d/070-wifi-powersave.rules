@@ -1,4 +1,6 @@
+# Match onboard (wlan*/wlp*) AND USB dongles (wlx*, named after their MAC,
+# e.g. wlx40a5ef1307ee) — otherwise USB WiFi keeps power_save ON and dozes off.
 ACTION=="add", \
 SUBSYSTEM=="net", \
-KERNEL=="wlan*" \
+KERNEL=="wlan*|wlp*|wlx*" \
 RUN+="/usr/sbin/iw %k set power_save off"

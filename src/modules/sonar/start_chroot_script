@@ -83,15 +83,22 @@ IFACE="$1"
 ACTION="$2"
 
 # Only act on WiFi interfaces going down
-case "$IFACE" in wlan*|wlp*) ;; *) exit 0 ;; esac
+# wlan*/wlp* = onboard, wlx* = USB dongles (named after MAC, e.g. wlx40a5ef1307ee)
+case "$IFACE" in wlan*|wlp*|wlx*) ;; *) exit 0 ;; esac
 
 if [ "$ACTION" = "down" ]; then
     logger -t wifi-reconnect "WiFi $IFACE went down, scheduling reconnect ..."
     # Wait a bit then ask NM to re-activate
     (
         sleep 5
+        # Unblock the radio first — a soft-blocked / wedged dongle can no
+        # longer scan, so a plain "device connect" silently does nothing.
+        rfkill unblock wifi 2>/dev/null
+        nmcli radio wifi on 2>/dev/null
+        nmcli device set "$IFACE" managed yes 2>/dev/null
+        sleep 2
         nmcli device connect "$IFACE" 2>/dev/null \
-            || nmcli networking off && sleep 2 && nmcli networking on
+            || { nmcli networking off; sleep 2; nmcli networking on; }
         logger -t wifi-reconnect "WiFi reconnect attempt done for $IFACE"
     ) &
 fi

@@ -57,7 +57,7 @@ fi
 cat << EOF > /etc/udev/rules.d/070-wifi-powersave.rules
 ACTION=="add", \
 SUBSYSTEM=="net", \
-KERNEL=="wlan*" \
+KERNEL=="wlan*|wlp*|wlx*" \
 RUN+="/usr/sbin/iw %k set power_save off"
 EOF
 echo -e "[  \e[32mOK\e[0m  ] Created Udev rule ... \n"
