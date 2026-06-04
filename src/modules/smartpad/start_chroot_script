@@ -140,7 +140,8 @@ echo_green "Install yumi-config ... [DONE]"
 ## Step 7: YUMI_PLR (Power Loss Recovery)
 echo_green "Install YUMI_PLR ..."
 pushd "/home/${BASE_USER}" &>/dev/null || exit 1
-sudo -u "${BASE_USER}" git clone https://github.com/Yumi-Lab/YUMI_PLR.git
+# Repo renomme Yumi_PLR ; on force le dossier local YUMI_PLR (chemins en dur dans plr.cfg)
+sudo -u "${BASE_USER}" git clone https://github.com/Yumi-Lab/Yumi_PLR.git YUMI_PLR
 pushd YUMI_PLR &>/dev/null || exit 1
 chmod +x ./install.sh
 ./install.sh
