@@ -69,6 +69,8 @@ target: auto
 count: 3
 interval: 30
 restart_threshold: 5
+dongle_recovery: true
+dongle_recovery_threshold: 3
 SONAREOF
 chown "${BASE_USER}:${BASE_USER}" "/home/${BASE_USER}/printer_data/config/sonar.conf"
 
