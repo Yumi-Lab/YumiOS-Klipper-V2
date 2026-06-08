@@ -11,7 +11,10 @@ StandardOutput=tty
 TTYPath=/dev/tty2
 TTYReset=yes
 TTYVHangup=yes
-TimeoutSec=600
+# No systemd timeout: the wizard manages its own per-step timeouts, and on error
+# it stays on a readable error screen that must not be killed. A wedged step is
+# bounded by the per-step `timeout` calls inside /usr/local/bin/firstboot.
+TimeoutSec=infinity
 
 [Install]
 WantedBy=multi-user.target
