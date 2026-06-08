@@ -18,7 +18,8 @@ BASE_OS_CODENAME="trixie"
 BASE_OS_VERSION="debian13"
 
 # Modules — same stack as Bookworm
-MODULES="base(udev_fix,armbian(armbian_net,yumios,klipper,is_req_preinstall,moonraker,mainsail,timelapse,klipperscreen,crowsnest,sonar,usb-automount,cpu_governor,mcu-rpi,tmc-autotune,yms-manager,smartpad,yumi-anc))"
+# TEST TEMPORAIRE: yms-manager + yumi-anc coupes pour isoler le hang firstboot
+MODULES="base(udev_fix,armbian(armbian_net,yumios,klipper,is_req_preinstall,moonraker,mainsail,timelapse,klipperscreen,crowsnest,sonar,usb-automount,cpu_governor,mcu-rpi,tmc-autotune,smartpad))"
 
 export BASE_ARCH
 export BASE_IMAGE_ENLARGEROOT
