@@ -35,6 +35,10 @@ log() { echo "[$(date '+%H:%M:%S')] $*" >>"${LOG}"; }
 # Make the wizard visible on the pad's console.
 chvt 2 2>>"${LOG}" || log "chvt 2 failed (non bloquant)"
 
+# Long steps (MCU compile, initramfs) run for minutes without keyboard input:
+# disable console blanking so the screen never goes dark mid-wizard.
+setterm --blank 0 --powerdown 0 2>>"${LOG}" >/dev/tty2 || log "setterm blank off failed (non bloquant)"
+
 # Stop KlipperScreen if it is somehow running (it would fight dialog on the TTY).
 if [[ "$(systemctl is-active KlipperScreen.service 2>/dev/null)" = "active" ]]; then
     systemctl stop KlipperScreen.service 2>>"${LOG}" || log "stop KlipperScreen failed (non bloquant)"
@@ -86,21 +90,26 @@ EOF
 
 # Non-blocking full-screen status — stays on screen while the step runs, so a
 # hung step leaves its own title visible ("where it blocks").
+# NEVER combine --clear with --infobox: dialog exits immediately after drawing
+# an infobox, and --clear erases the screen at exit — the box would flash for a
+# few milliseconds and leave a black screen for the whole step duration.
 show() {
     local msg
     printf -v msg '%b' "$1"
-    "${DIALOG[@]}" --clear --infobox "${msg}" "${RESOLUTION[@]}"
+    "${DIALOG[@]}" --infobox "${msg}" "${RESOLUTION[@]}"
 }
 
 # Visible error screen. Shows the failed step + log tail, keeps the system up
 # (SSH possible), never reboots, stays on screen for debugging.
 halt_on_error() {
     local title="$1" rc="$2" msg tail_txt
-    tail_txt="$(tail -n 14 "${LOG}" 2>/dev/null)"
+    tail_txt="$(tail -n 8 "${LOG}" 2>/dev/null)"
     log "STEP ${STEP}/${TOTAL} '${title}' FAILED (rc=${rc})"
-    printf -v msg 'Le premier demarrage a echoue ici :\n\n  Etape %d/%d : %s  (rc=%s)\n\n--- fin du journal ---\n%s\n\nJournal complet : %s\nLe pad reste allume (SSH possible), aucun reboot.' \
-        "${STEP}" "${TOTAL}" "${title}" "${rc}" "${tail_txt}" "${LOG}"
-    "${DIALOG[@]}" --clear --title "ECHEC etape ${STEP}/${TOTAL}" --infobox "${msg}" 30 72
+    printf -v msg 'Le premier demarrage a echoue ici :\n\n  Etape %d/%d : %s  (rc=%s)\n\n--- fin du journal (%s) ---\n%s\n\nLe pad reste allume (SSH possible), aucun reboot.' \
+        "${STEP}" "${TOTAL}" "${title}" "${rc}" "${LOG}" "${tail_txt}"
+    # No --clear (see show), and the box MUST fit the 80x24 console (Terminus
+    # 20x10 on 800x480) — an oversized box would not render at all.
+    "${DIALOG[@]}" --title "ECHEC etape ${STEP}/${TOTAL}" --infobox "${msg}" 22 76
     while true; do sleep 3600; done
 }
 
@@ -193,7 +202,9 @@ step_mcu() (
     timeout 120 make clean
     cp /home/pi/klipper_linux.config .config
     timeout 60 make olddefconfig
-    timeout 420 make -j"${jobs}"
+    # -j2 on the 1 GHz H3 takes noticeably longer than the old -j4 build:
+    # give it 15 min before declaring the step wedged.
+    timeout 900 make -j"${jobs}"
     test -f out/klipper.elf
     rm -f /usr/local/bin/klipper_mcu
     cp out/klipper.elf /usr/local/bin/klipper_mcu
