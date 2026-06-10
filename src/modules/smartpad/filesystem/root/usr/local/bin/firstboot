@@ -179,9 +179,13 @@ step_free_ram() (
     # the MCU compile. Stop them first; they all restart after the reboot.
     echo "Free memory before:"; free -m || echo "(free unavailable)"
     for svc in klipper moonraker crowsnest sonar moonraker-app-yumi-lab; do
-        if [[ "$(systemctl is-active "${svc}.service" 2>/dev/null)" == "active" ]]; then
-            echo "stopping ${svc}.service ..."
-            systemctl stop "${svc}.service"
+        state="$(systemctl is-active "${svc}.service" 2>/dev/null)"
+        # "activating" too: these services start in parallel with the wizard
+        if [[ "${state}" == "active" || "${state}" == "activating" ]]; then
+            echo "stopping ${svc}.service (etat: ${state}) ..."
+            if ! systemctl stop "${svc}.service"; then
+                echo "WARN: stop ${svc} a echoue — on continue (compile juste plus lente)"
+            fi
         fi
     done
     echo "Free memory after:"; free -m || echo "(free unavailable)"
@@ -193,9 +197,10 @@ step_mcu() (
         echo "No klipper_linux.config — MCU already built, skipping."
         exit 0
     fi
+    # -j$(nproc) comme l'ancien wizard valide : la RAM est libre (services
+    # stoppes a l'etape precedente), et -j2 doublait le temps de compile.
     local jobs
     jobs="$(nproc)"
-    if [[ "${jobs}" -gt 2 ]]; then jobs=2; fi
     echo "Compiling Klipper Linux MCU with -j${jobs}"
     cd /home/pi/klipper
     git config --system --add safe.directory /home/pi/klipper
@@ -215,7 +220,7 @@ step_mcu() (
 
 step_initramfs() (
     set -e
-    update-initramfs -u
+    timeout 600 update-initramfs -u
     echo "initramfs regenerated (Plymouth theme embedded)"
 )
 
@@ -255,11 +260,14 @@ fi
 "${DIALOG[@]}" --clear --title "YumiOS First Boot" \
     --no-cancel --no-ok --pause "$(welcome_msg)" "${RESOLUTION[@]}" 15
 
+# bootlogo APRES initramfs : ne jamais activer le splash avant que le theme
+# Plymouth soit embarque (une coupure de courant entre les deux laisserait un
+# boot avec splash actif mais initramfs sans theme = framebuffer vide).
 run_step "Rotation de l'ecran"            step_rotation
-run_step "Logo de demarrage (Plymouth)"   step_bootlogo
 run_step "Liberation de la RAM"           step_free_ram
 run_step "Compilation MCU GPIO"           step_mcu
 run_step "Generation de l'initramfs"      step_initramfs
+run_step "Logo de demarrage (Plymouth)"   step_bootlogo
 run_step "Activation de KlipperScreen"    step_enable_ks
 run_step "Finalisation"                   step_finalize
 
