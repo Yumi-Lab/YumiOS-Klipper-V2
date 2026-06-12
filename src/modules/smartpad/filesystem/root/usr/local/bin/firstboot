@@ -179,7 +179,13 @@ step_free_ram() (
     # the MCU compile. Stop them first; they all restart after the reboot.
     echo "Free memory before:"; free -m || echo "(free unavailable)"
     for svc in klipper moonraker crowsnest sonar moonraker-app-yumi-lab; do
-        state="$(systemctl is-active "${svc}.service" 2>/dev/null)"
+        # systemctl is-active sort en code 3 pour tout etat != active (inactive,
+        # activating, unknown) : sous set -e une affectation seule prendrait ce
+        # code et tuerait l'etape au premier service non actif (bug rc=3 vu sur
+        # pad). On garde quand meme la sortie texte qu'il imprime.
+        if ! state="$(systemctl is-active "${svc}.service" 2>/dev/null)"; then
+            state="${state:-inactive}"
+        fi
         # "activating" too: these services start in parallel with the wizard
         if [[ "${state}" == "active" || "${state}" == "activating" ]]; then
             echo "stopping ${svc}.service (etat: ${state}) ..."
