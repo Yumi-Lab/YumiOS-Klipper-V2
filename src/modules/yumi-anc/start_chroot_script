@@ -18,11 +18,38 @@ set -Ee
 source /common.sh
 install_cleanup_trap
 
+# --- Transient-network resilience -------------------------------------------
+# Retry a command up to 5 times with a 10s backoff. NO silent failure: after the
+# last attempt we return non-zero so set -e aborts the build (no "|| true").
+retry() {
+    local -i attempt=1 max_attempts=5 delay=10
+    while true; do
+        if "$@"; then
+            return 0
+        fi
+        if (( attempt >= max_attempts )); then
+            echo_red "Command failed after ${max_attempts} attempts: $*"
+            return 1
+        fi
+        echo_yellow "Attempt ${attempt}/${max_attempts} failed, retrying in ${delay}s ..."
+        sleep "${delay}"
+        attempt+=1
+    done
+}
+
+# Clone from scratch each attempt (a half-cloned dir would make a retry fail on
+# "destination path already exists").
+clone_yumi_anc() {
+    rm -rf "${YUMI_ANC_DIR}"
+    sudo -u "${BASE_USER}" \
+        git clone --depth 1 -b "${YUMI_ANC_REPO_BRANCH}" "${YUMI_ANC_REPO_SHIP}" "${YUMI_ANC_DIR}"
+}
+
 echo_green "Installing Yumi_ANC ..."
 
 ## Step 1: audio stack dependencies
 # shellcheck disable=SC2086
-check_install_pkgs ${ACOUSTIC_CAL_DEPS}
+retry check_install_pkgs ${ACOUSTIC_CAL_DEPS}
 
 ## Step 2: enable the H3 analog codec overlay (MIC1 on the SmartPad PCB)
 ARMBIAN_ENV="/boot/armbianEnv.txt"
@@ -37,8 +64,7 @@ fi
 
 ## Step 3: clone the repo (owned by BASE_USER so Moonraker can update it live)
 pushd "/home/${BASE_USER}" &>/dev/null || exit 1
-sudo -u "${BASE_USER}" \
-    git clone --depth 1 -b "${YUMI_ANC_REPO_BRANCH}" "${YUMI_ANC_REPO_SHIP}" "${YUMI_ANC_DIR}"
+retry clone_yumi_anc
 git config --global --add safe.directory "${YUMI_ANC_DIR}"
 chown -R "${BASE_USER}:${BASE_USER}" "${YUMI_ANC_DIR}"
 
