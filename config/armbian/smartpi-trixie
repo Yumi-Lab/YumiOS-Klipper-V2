@@ -18,8 +18,9 @@ BASE_OS_CODENAME="trixie"
 BASE_OS_VERSION="debian13"
 
 # Modules — same stack as Bookworm
-# TEST TEMPORAIRE: yms-manager + yumi-anc coupes pour isoler le hang firstboot
-MODULES="base(udev_fix,armbian(armbian_net,yumios,klipper,is_req_preinstall,moonraker,mainsail,timelapse,klipperscreen,crowsnest,sonar,usb-automount,cpu_governor,mcu-rpi,tmc-autotune,smartpad))"
+# yms-manager et yumi-anc APRES smartpad : un echec d'un module addon ne doit
+# jamais empecher l'installation du wizard/Plymouth (lecon du build 06-03)
+MODULES="base(udev_fix,armbian(armbian_net,yumios,klipper,is_req_preinstall,moonraker,mainsail,timelapse,klipperscreen,crowsnest,sonar,usb-automount,cpu_governor,mcu-rpi,tmc-autotune,smartpad,yms-manager,yumi-anc))"
 
 export BASE_ARCH
 export BASE_IMAGE_ENLARGEROOT
