@@ -152,22 +152,38 @@ ACTION="$2"
 # wlan*/wlp* = onboard, wlx* = USB dongles (named after MAC, e.g. wlx40a5ef1307ee)
 case "$IFACE" in wlan*|wlp*|wlx*) ;; *) exit 0 ;; esac
 
-if [ "$ACTION" = "down" ]; then
-    logger -t wifi-reconnect "WiFi $IFACE went down, scheduling reconnect ..."
-    # Wait a bit then ask NM to re-activate
-    (
-        sleep 5
-        # Unblock the radio first — a soft-blocked / wedged dongle can no
-        # longer scan, so a plain "device connect" silently does nothing.
-        rfkill unblock wifi 2>/dev/null
-        nmcli radio wifi on 2>/dev/null
-        nmcli device set "$IFACE" managed yes 2>/dev/null
-        sleep 2
-        nmcli device connect "$IFACE" 2>/dev/null \
-            || { nmcli networking off; sleep 2; nmcli networking on; }
-        logger -t wifi-reconnect "WiFi reconnect attempt done for $IFACE"
-    ) &
-fi
+[ "$ACTION" = "down" ] || exit 0
+
+logger -t wifi-reconnect "WiFi $IFACE went down, scheduling reconnect ..."
+(
+    # Single instance for the whole retry window: a "down" event also fires
+    # when our own reconnect replaces an in-flight activation
+    # ("new-activation"), so without a lock this script feeds itself an
+    # endless activation storm.
+    exec 9>/run/wifi-reconnect.lock
+    flock -n 9 || exit 0
+    sleep 8
+    # If NM is already (re)connecting the device, do NOT interrupt it:
+    # "nmcli device connect" on an activating device aborts the in-flight
+    # activation (reason 'new-activation') and the link never settles.
+    state=$(nmcli -g GENERAL.STATE device show "$IFACE" 2>/dev/null | head -1)
+    case "$state" in
+        ""|*unmanaged*) : ;;          # device vanished or unmanaged: try to recover below
+        *disconnected*|*unavailable*) : ;;
+        *) logger -t wifi-reconnect "NM already handling $IFACE ($state), leaving it alone"; exit 0 ;;
+    esac
+    # Unblock the radio first — a soft-blocked / wedged dongle can no
+    # longer scan, so a plain "device connect" silently does nothing.
+    rfkill unblock wifi 2>/dev/null
+    nmcli radio wifi on 2>/dev/null
+    nmcli device set "$IFACE" managed yes 2>/dev/null
+    sleep 2
+    # NEVER "nmcli networking off/on" here: it tears down ALL interfaces,
+    # including ethernet — a failed WiFi retry must not kill a working LAN.
+    nmcli device connect "$IFACE" 2>/dev/null \
+        || logger -t wifi-reconnect "reconnect failed for $IFACE (NM autoconnect keeps retrying)"
+    logger -t wifi-reconnect "WiFi reconnect attempt done for $IFACE"
+) >/dev/null 2>&1 &
 DISPEOF
 chmod 755 /etc/NetworkManager/dispatcher.d/99-wifi-reconnect
 
