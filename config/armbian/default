@@ -26,7 +26,7 @@ BASE_BOOT_MOUNT_PATH="/boot/"
 BASE_RELEASE_COMPRESS=no
 # Modules are valid for 32bit and 64bit images
 # yms-manager + yumi-anc en fin de liste (apres les modules critiques)
-MODULES="base(udev_fix,armbian(armbian_net,yumios,klipper,is_req_preinstall,moonraker,mainsail,timelapse,klipperscreen,crowsnest,sonar,usb-automount,cpu_governor,mcu-rpi,tmc-autotune,yms-manager,yumi-anc))"
+MODULES="base(udev_fix,armbian(armbian_net,yumios,klipper,is_req_preinstall,moonraker,mainsail,timelapse,klipperscreen,crowsnest,sonar,usb-automount,cpu_governor,mcu-rpi,tmc-autotune))"
 
 # export Variables
 export DOWNLOAD_BASE_URL
