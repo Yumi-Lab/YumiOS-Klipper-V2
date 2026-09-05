@@ -6,12 +6,22 @@
 # DietPi's own first-boot configuration file, read by dietpi-firstboot and dietpi-preboot
 [ -n "$DIETPI_TXT" ] || DIETPI_TXT="/boot/dietpi.txt"
 
-# What the DietPi installer stripped and the YumiOS stack needs back:
+# What the DietPi installer stripped and the YumiOS stack needs back.
+# Services replaced by DietPi:
 #  network-manager  — sonar dispatcher, KlipperScreen network panel, WiFi wizard
 #  openssh-*        — replaces Dropbear (SAV reverse tunnel, sftp)
 #  rsyslog          — full on-disk logs like the Armbian base (post-mortem on a pad)
 #  zram-tools       — swap in RAM instead of DietPi's swapfile on the SD card
-[ -n "$DIETPI_DEPS" ] || DIETPI_DEPS="network-manager openssh-server openssh-client rsyslog zram-tools"
+DIETPI_SERVICES_DEPS="network-manager openssh-server openssh-client rsyslog zram-tools"
+# Tooling every module takes for granted because the Armbian server image ships it
+# (486 packages) and the DietPi conversion autoremoved it (199 left): git, python3,
+# the build chain, archive tools, dbus... Subset of the package diff between
+# SmartPi-armbian and DietPi-SmartPi v1.8.0-rc5 that the module chain actually uses.
+DIETPI_TOOLING_DEPS="git build-essential make patch file unzip rsync jq xz-utils bzip2 bc \
+lsb-release gnupg dbus dbus-user-session perl netbase media-types ucf less logrotate \
+python3 python3-venv python3-pip python3-dev virtualenv python3-yaml python3-dbus \
+i2c-tools device-tree-compiler evtest fbset lm-sensors"
+[ -n "$DIETPI_DEPS" ] || DIETPI_DEPS="${DIETPI_SERVICES_DEPS} ${DIETPI_TOOLING_DEPS}"
 [ -n "$DIETPI_PURGE_PKGS" ] || DIETPI_PURGE_PKGS="dropbear dropbear-bin dropbear-run"
 
 # dietpi-firstboot applies these on the pad's first boot (DietPi defaults: gb / GB / London)

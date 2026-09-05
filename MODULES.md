@@ -33,7 +33,7 @@ This ensures **zero breaking changes** from upstream without losing security pat
 | mcu-rpi | YumiOS original | RPi MCU support |
 | cpu_governor | YumiOS original | One fixed CPU frequency (`CPU_GOVERNOR_FREQ_KHZ`, 960 MHz) — cpufrequtils on Armbian, dietpi.txt on DietPi |
 | armbian_net | CustomPiOS original | Network configurator (Armbian base only) |
-| dietpi | YumiOS original | DietPi-SmartPi base → YumiOS (NetworkManager, OpenSSH, logs, zram, first run) |
+| dietpi | YumiOS original | DietPi-SmartPi base → YumiOS (NetworkManager, OpenSSH, logs, zram, first run, Armbian tooling baseline) |
 | base | CustomPiOS original | Base OS setup |
 
 ---
@@ -68,7 +68,7 @@ after `base`, before `armbian`, and restores what the YumiOS stack relies on:
 | DietPi state | YumiOS needs | Module action |
 |---|---|---|
 | ifupdown + wpa_supplicant, no NetworkManager | NM (sonar dispatcher, KlipperScreen network panel) | installs NM, `/etc/network/interfaces` keeps `lo` only |
-| Dropbear | OpenSSH (SAV reverse tunnel, sftp) | purges Dropbear, installs OpenSSH, per-device host keys on first boot (`yumi-ssh-hostkeys.service`) |
+| Dropbear | OpenSSH (SAV reverse tunnel, sftp) | purges Dropbear, installs OpenSSH, deletes the build-time host keys (Debian's `sshd-keygen.service` makes per-device ones) |
 | `/var/log` = 50 MB tmpfs (dietpi-ramlog) | on-disk logs + rsyslog | drops the fstab line, disables ramlog |
 | swapfile on the SD card at first boot | zram (Armbian parity) | `zram-tools`, `AUTO_SETUP_SWAPFILE_SIZE=0` |
 | automated first run: dietpi-update + dietpi-software + reboot, root autologin on tty1 | the YumiOS firstboot wizard | `AUTO_SETUP_AUTOMATED=0`, `.install_stage=2` right after `dietpi-firstboot` (drop-in) |
