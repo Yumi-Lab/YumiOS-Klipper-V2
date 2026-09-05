@@ -57,6 +57,12 @@ for cfg in /etc/ssh/sshd_config /etc/ssh/ssh_config; do
         rm -f "${cfg}"
     fi
 done
+### DietPi points Dir::Cache at /tmp/apt but keeps Dir::Cache::archives under
+### /var/cache/apt (99-dietpi-cache). CustomPiOS bind-mounts its empty build cache over
+### /var/cache/apt, and apt only auto-creates archives/partial below Dir::Cache — so the
+### first apt run dies with "Archives directory /var/cache/apt/archives/partial is
+### missing" unless the directory is there.
+mkdir -p /var/cache/apt/archives/partial
 ### Dropbear goes first: two SSH servers on port 22 is one too many
 for pkg in ${DIETPI_PURGE_PKGS}; do
     if [[ "$(is_installed "${pkg}")" -eq 1 ]]; then
