@@ -135,7 +135,7 @@ else
   echo_red "  moonraker.conf not found — update_manager entry skipped."
 fi
 
-## Step 9: NetworkManager WiFi auto-reconnect dispatcher
+## Step 9: NetworkManager WiFi dispatcher — auto-reconnect on down, infinite retries on up
 echo_green "Installing NetworkManager WiFi reconnect dispatcher ..."
 cat <<'DISPEOF' > /etc/NetworkManager/dispatcher.d/99-wifi-reconnect
 #!/usr/bin/env bash
@@ -145,9 +145,23 @@ cat <<'DISPEOF' > /etc/NetworkManager/dispatcher.d/99-wifi-reconnect
 IFACE="$1"
 ACTION="$2"
 
-# Only act on WiFi interfaces going down
+# Only act on WiFi interfaces
 # wlan*/wlp* = onboard, wlx* = USB dongles (named after MAC, e.g. wlx40a5ef1307ee)
 case "$IFACE" in wlan*|wlp*|wlx*) ;; *) exit 0 ;; esac
+
+# A WiFi profile that just connected must be retried forever by NetworkManager
+# itself: with the default (4 retries) NM gives up when the access point is away
+# for two minutes at boot and the pad sits offline until someone opens the
+# network panel. NetworkManager.conf cannot set that default (the key is not a
+# connection default on NM 1.52), so it is set on the profile the first time it
+# comes up. Idempotent: a profile already at 0 is left alone.
+if [ "$ACTION" = "up" ] && [ -n "$CONNECTION_UUID" ]; then
+    if [ "$(nmcli -g connection.autoconnect-retries connection show uuid "$CONNECTION_UUID" 2>/dev/null)" != "0" ]; then
+        nmcli connection modify uuid "$CONNECTION_UUID" connection.autoconnect-retries 0 \
+            && logger -t wifi-reconnect "$IFACE: '$CONNECTION_ID' now retried forever by NetworkManager"
+    fi
+    exit 0
+fi
 
 [ "$ACTION" = "down" ] || exit 0
 
@@ -184,13 +198,11 @@ logger -t wifi-reconnect "WiFi $IFACE went down, scheduling reconnect ..."
 DISPEOF
 chmod 755 /etc/NetworkManager/dispatcher.d/99-wifi-reconnect
 
-## Step 10: Force autoconnect on all future WiFi connections
-echo_green "Configuring NetworkManager autoconnect ..."
-cat <<'NMEOF' > /etc/NetworkManager/conf.d/wifi-autoconnect.conf
-[connection]
-# Retry WiFi connection indefinitely (0 = infinite retries)
-connection.autoconnect-retries=0
-NMEOF
+## Step 10: (autoconnect retries are set per profile by the dispatcher above:
+## NetworkManager 1.52 logs "config: unknown key 'connection.autoconnect-retries'"
+## for a [connection] default in NetworkManager.conf and ignores it — seen on the
+## first DietPi pad, which gave up after 4 retries at boot)
+rm -f /etc/NetworkManager/conf.d/wifi-autoconnect.conf
 
 ## Step 11: clean packages.lst file
 rm -f "${SR_BUILD_PACKAGE_FILE}"
