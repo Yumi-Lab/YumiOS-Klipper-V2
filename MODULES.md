@@ -68,7 +68,7 @@ after `base`, before `armbian`, and restores what the YumiOS stack relies on:
 | DietPi state | YumiOS needs | Module action |
 |---|---|---|
 | ifupdown + wpa_supplicant, no NetworkManager | NM (sonar dispatcher, KlipperScreen network panel) | installs NM, `/etc/network/interfaces` keeps `lo` only |
-| Dropbear | OpenSSH (SAV reverse tunnel, sftp) | purges Dropbear, installs OpenSSH, deletes the build-time host keys (Debian's `sshd-keygen.service` makes per-device ones) |
+| Dropbear | OpenSSH (SAV reverse tunnel, sftp) | purges Dropbear, installs OpenSSH, deletes the build-time host keys; `yumi-ssh-hostkeys.service` regenerates them on the pad (Debian's `sshd-keygen.service` has `ConditionFirstBoot=yes`, never true on a populated image) |
 | `dietpi-firstboot` writes `PermitRootLogin yes` in `sshd_config.d/dietpi.conf` | no root over SSH (Armbian parity) | `sshd_config.d/00-yumi.conf` sorts first, sshd keeps the first value |
 | serial getty enabled on ttyS0…ttyS31 (every ttyS of the conversion runner) | only the kernel console getty; ttyS1/ttyS2 are Klipper UARTs | removes the `serial-getty@ttyS*` symlinks, systemd-getty-generator handles `console=ttyS0` |
 | cfg80211 blacklisted until `dietpi-firstboot` lifts it | WiFi from the first boot, not from a first-boot script | deletes `modprobe.d/dietpi-disable_wifi.conf` at build |

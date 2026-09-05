@@ -10,7 +10,7 @@
 ####    comes back and owns every interface: /etc/network/interfaces keeps the loopback
 ####    only, which also keeps dietpi-firstboot / dietpi-config away from eth0/wlan0.
 ####  - Dropbear replaced OpenSSH → OpenSSH again (SAV reverse tunnel, sftp); the
-####    build-time host keys are deleted, sshd-keygen.service makes per-device ones.
+####    build-time host keys are deleted, yumi-ssh-hostkeys.service makes per-device ones.
 ####  - /var/log became a 50 MB tmpfs (dietpi-ramlog) → full on-disk logs + rsyslog,
 ####    like the Armbian base: a pad is debugged after the fact from its logs.
 ####  - swap: DietPi creates a swapfile on the SD card at first boot → zram instead
@@ -40,7 +40,7 @@ fi
 
 echo_green "Adapting the DietPi base to YumiOS ..."
 
-## Step 1: files (dietpi.txt helper, first-run drop-in, sshd hardening, NM usb0 exclusion)
+## Step 1: files (dietpi.txt helper, first-run drop-in, sshd hardening, host keys unit, NM usb0 exclusion)
 unpack /filesystem/root /
 chmod 755 /usr/local/sbin/yumi-dietpi-txt
 
@@ -75,10 +75,13 @@ check_install_pkgs ${DIETPI_DEPS}
 for cfg in "${!ssh_stubs[@]}"; do
     printf '%s\n' "${ssh_stubs[${cfg}]}" >> "${cfg}"
 done
-### Host keys are per device: drop the build-time ones. Trixie's openssh-server ships
-### sshd-keygen.service (wanted by ssh.service), which regenerates missing keys on boot.
+### Host keys are per device: drop the build-time ones and regenerate them on the pad.
+### Not with Debian's sshd-keygen.service: it has ConditionFirstBoot=yes, which is never
+### true on an image whose /etc/machine-id is populated — sshd would fail on the missing
+### keys and ssh.service would restart forever (first DietPi pad: SSH dead).
 rm -f /etc/ssh/ssh_host_*
 systemctl_if_exists enable ssh.service
+systemctl_if_exists enable yumi-ssh-hostkeys.service
 
 ## Step 3: NetworkManager owns every interface
 cat > /etc/network/interfaces << 'IFACES'
