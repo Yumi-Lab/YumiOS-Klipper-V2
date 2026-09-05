@@ -147,6 +147,12 @@ fi
 ## Step 8: leftovers of the conversion
 ### dangling symlink to a unit the installer removed with the Armbian BSP
 rm -f /etc/systemd/system/multi-user.target.wants/armbian-firstrun.service
+### DietPi masks systemd-logind to save a few MB (AUTO_UNMASK_LOGIND=0). The Armbian base
+### runs it, and without it every login logs "pam_systemd: Failed to create session" and
+### anything asking logind for a session (polkit, loginctl, X sessions) works by accident
+### or not at all. Same userland as Armbian: logind on.
+systemctl_if_exists unmask systemd-logind.service
+yumi-dietpi-txt AUTO_UNMASK_LOGIND 1
 ### The DietPi installer enabled a serial getty on every /dev/ttyS* of the machine
 ### that ran the conversion — ttyS0 to ttyS31 on a GitHub runner. On the pad that
 ### means 29 units timing out at boot, and agetty grabbing ttyS1/ttyS2, the UARTs the
