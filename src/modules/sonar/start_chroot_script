@@ -89,7 +89,12 @@ make install || { echo_red "Sonar install failed"; exit 1; }
 popd &> /dev/null || exit 1
 
 ## Step 8: Override sonar.conf — enable + tuned for NetworkManager
-echo_green "Writing sonar.conf (enabled, 30s interval) ..."
+## Reactivity: sonar polls the default route every `interval` seconds and, after
+## `dongle_recovery_threshold` cycles without one, runs its recovery (nmcli reconnect,
+## driver reload only if the adapter sees no AP). 30 s x 3 gave a first attempt 90 s
+## after the loss and ~10 min to be back on the bench; 15 s x 2 = 30 s. Not shorter:
+## the recovery itself takes ~80 s and hammering the RTL8188EU dongle wedges it.
+echo_green "Writing sonar.conf (enabled, 15s interval, recovery after 2 cycles) ..."
 cat <<'SONAREOF' > "/home/${BASE_USER}/printer_data/config/sonar.conf"
 [sonar]
 enable: true
@@ -97,10 +102,10 @@ debug_log: false
 persistent_log: false
 target: auto
 count: 3
-interval: 30
-restart_threshold: 5
+interval: 15
+restart_threshold: 3
 dongle_recovery: true
-dongle_recovery_threshold: 3
+dongle_recovery_threshold: 2
 SONAREOF
 chown "${BASE_USER}:${BASE_USER}" "/home/${BASE_USER}/printer_data/config/sonar.conf"
 
@@ -149,17 +154,20 @@ ACTION="$2"
 # wlan*/wlp* = onboard, wlx* = USB dongles (named after MAC, e.g. wlx40a5ef1307ee)
 case "$IFACE" in wlan*|wlp*|wlx*) ;; *) exit 0 ;; esac
 
-# A WiFi profile that just connected must be retried forever by NetworkManager
-# itself: with the default (4 retries) NM gives up when the access point is away
-# for two minutes at boot and the pad sits offline until someone opens the
-# network panel. NetworkManager.conf cannot set that default (the key is not a
-# connection default on NM 1.52), so it is set on the profile the first time it
-# comes up. Idempotent: a profile already at 0 is left alone.
-if [ "$ACTION" = "up" ] && [ -n "$CONNECTION_UUID" ]; then
-    if [ "$(nmcli -g connection.autoconnect-retries connection show uuid "$CONNECTION_UUID" 2>/dev/null)" != "0" ]; then
-        nmcli connection modify uuid "$CONNECTION_UUID" connection.autoconnect-retries 0 \
-            && logger -t wifi-reconnect "$IFACE: '$CONNECTION_ID' now retried forever by NetworkManager"
-    fi
+# Every saved WiFi profile must be retried forever by NetworkManager itself: with
+# the default (4 retries) NM gives up when the access point is away for two minutes
+# at boot and the pad sits offline until someone opens the network panel.
+# NetworkManager.conf cannot set that default (the key is not a connection default
+# on NM 1.52), so it is set on the profiles themselves, every time an interface
+# comes up — a sweep, so profiles saved by KlipperScreen that never managed to
+# connect yet are covered too. Idempotent: profiles already at 0 are left alone.
+if [ "$ACTION" = "up" ]; then
+    nmcli -t -g UUID,TYPE,NAME connection show 2>/dev/null | while IFS=: read -r uuid type name; do
+        [ "$type" = "802-11-wireless" ] || continue
+        [ "$(nmcli -g connection.autoconnect-retries connection show uuid "$uuid" 2>/dev/null)" = "0" ] && continue
+        nmcli connection modify uuid "$uuid" connection.autoconnect-retries 0 \
+            && logger -t wifi-reconnect "'$name' now retried forever by NetworkManager"
+    done
     exit 0
 fi
 
