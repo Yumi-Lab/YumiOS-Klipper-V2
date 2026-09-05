@@ -40,7 +40,7 @@ fi
 
 echo_green "Adapting the DietPi base to YumiOS ..."
 
-## Step 1: files (dietpi.txt helper, first-run drop-in)
+## Step 1: files (dietpi.txt helper, first-run drop-in, sshd hardening drop-in)
 unpack /filesystem/root /
 chmod 755 /usr/local/sbin/yumi-dietpi-txt
 
@@ -129,5 +129,11 @@ echo "verbosity=${DIETPI_VERBOSITY}" >> "${ARMBIAN_CONFIG_TXT_FILE}"
 ## Step 8: leftovers of the conversion
 ### dangling symlink to a unit the installer removed with the Armbian BSP
 rm -f /etc/systemd/system/multi-user.target.wants/armbian-firstrun.service
+### The DietPi installer enabled a serial getty on every /dev/ttyS* of the machine
+### that ran the conversion — ttyS0 to ttyS31 on a GitHub runner. On the pad that
+### means 29 units timing out at boot, and agetty grabbing ttyS1/ttyS2, the UARTs the
+### uart1/uart2 overlays expose for Klipper peripherals. The kernel console
+### (console=ttyS0 from boot.cmd) gets its getty from systemd-getty-generator anyway.
+rm -f /etc/systemd/system/getty.target.wants/serial-getty@ttyS*.service
 
 echo_green "Adapting the DietPi base to YumiOS ... [DONE]"
