@@ -8,4 +8,6 @@
 # two-step themes (fast, compiled C plugin): pack_yumi/yumi-klipper, pack_yumi/retromi
 # script themes (slower, interpreted): pack_1/*, pack_2/hexagon_alt, pack_3/*, pack_4/*
 [[ -n "$SMARTPAD_PLYMOUTH_THEME" ]] || SMARTPAD_PLYMOUTH_THEME="pack_yumi/yumi-klipper"
-[[ -n "$SMARTPAD_DEPS" ]] || SMARTPAD_DEPS="plymouth dialog v4l-utils console-setup keyboard-configuration kbd"
+# plymouth-themes ships two-step.so, plymouth-label the text renderer, fonts-dejavu-core
+# the theme fonts: all three are in the Armbian base but not in the DietPi one.
+[[ -n "$SMARTPAD_DEPS" ]] || SMARTPAD_DEPS="plymouth plymouth-themes plymouth-label fonts-dejavu-core dialog v4l-utils console-setup keyboard-configuration kbd"

@@ -9,7 +9,7 @@
 #### - YUMI_PLR (power loss recovery)
 #### - Webcam fix service
 #### - Moonraker allowed services
-#### - Firstboot wizard (only on boards with display)
+#### - Firstboot wizard (only on boards with display): rotation, MCU build, KlipperScreen
 ####
 #### Works for both SmartPad (arm64, display) and SmartPi ONE (armhf, headless)
 
@@ -66,31 +66,104 @@ else
 fi
 echo_green "Configure kernel extra args... DONE!"
 
-## Step 3: Plymouth boot theme
+## Step 3: Plymouth boot theme — installed AND embedded in the initramfs at build time
+##
+## `update-initramfs -u` without a version is a silent no-op inside the build chroot:
+## the Armbian/DietPi bases ship no /var/lib/initramfs-tools record and `uname -r`
+## is the CI runner kernel, so update-initramfs finds "nothing to do" and exits 0.
+## Images built until 2026-06 therefore shipped the untouched base initrd and let the
+## firstboot wizard regenerate it on the pad — and that on-device regeneration is the
+## step that produced un-bootable pads (kernel panic "Attempted to kill init!
+## exitcode=0x00007f00" = the initramfs could not exec run-init after init-bottom).
+## Generating the initramfs here for the kernel actually installed in the image, and
+## verifying its content, makes the image boot with the Yumi splash from the very
+## first power-on, with nothing left to rebuild on the device.
 echo_green "Install Yumi Lab Plymouth theme..."
 pushd "/home/${BASE_USER}" &>/dev/null || exit 1
 
 install_plymouth_theme() {
-    local src dest
+    local src dest theme_name
     dest="/usr/share/plymouth/themes/"
     src="/home/${BASE_USER}/$(basename "${SMARTPAD_PLYMOUTH_REPO/.git/}")"
     src="${src}/${SMARTPAD_PLYMOUTH_THEME}"
-    local theme_name
     theme_name="$(basename "${SMARTPAD_PLYMOUTH_THEME}")"
-    if [[ -d "${src}" ]]; then
-        cp -r "${src}" "${dest}"
-        plymouth-set-default-theme "${theme_name}"
-        update-initramfs -u
-        echo_green "Plymouth theme set to ${theme_name} (initramfs updated)"
-    else
-        echo_green "Plymouth theme dir not found, skipping"
+    if [[ ! -d "${src}" ]]; then
+        echo_red "Plymouth theme ${SMARTPAD_PLYMOUTH_THEME} not found in ${SMARTPAD_PLYMOUTH_REPO}"
+        return 1
     fi
+    cp -r "${src}" "${dest}"
+    plymouth-set-default-theme "${theme_name}"
+    echo_green "Plymouth theme set to ${theme_name}"
+}
+
+# Exactly one kernel is installed in the base images; refuse to guess otherwise.
+image_kernel_version() {
+    local -a versions
+    mapfile -t versions < <(ls -1 /lib/modules)
+    if [[ "${#versions[@]}" -ne 1 ]]; then
+        echo_red "Expected exactly one kernel in /lib/modules, found: ${versions[*]:-none}"
+        return 1
+    fi
+    echo "${versions[0]}"
+}
+
+# The initramfs must contain what the boot chain needs, and /boot/uInitrd must be
+# the U-Boot wrap of THIS initrd (post-update hook, with the FAT mv fallback).
+verify_initramfs() {
+    local initrd="$1" theme_name="$2" listing klibc_so entry initrd_size uinitrd_size
+    listing="$(lsinitramfs "${initrd}")"
+    # run-init is a klibc binary: the loader it names must be inside, hash included
+    klibc_so="$(grep -ao 'klibc-[A-Za-z0-9_-]*\.so' /usr/lib/klibc/bin/run-init | head -n1)"
+    if [[ -z "${klibc_so}" ]]; then
+        echo_red "Cannot read the klibc loader name from /usr/lib/klibc/bin/run-init"
+        return 1
+    fi
+    for entry in \
+        "^usr/bin/run-init$" \
+        "^usr/lib/${klibc_so}$" \
+        "^usr/share/plymouth/themes/${theme_name}/${theme_name}\.plymouth$" \
+        "^usr/lib/[^/]+/plymouth/two-step\.so$"; do
+        if ! grep -Eq "${entry}" <<< "${listing}"; then
+            echo_red "initramfs ${initrd} lacks ${entry}"
+            return 1
+        fi
+    done
+    initrd_size="$(stat -c %s "${initrd}")"
+    uinitrd_size="$(mkimage -l /boot/uInitrd | awk '/Data Size/ {print $3}')"
+    if [[ "${initrd_size}" != "${uinitrd_size}" ]]; then
+        echo_red "/boot/uInitrd (${uinitrd_size} B) does not wrap ${initrd} (${initrd_size} B)"
+        return 1
+    fi
+    echo_green "initramfs verified: run-init, ${klibc_so}, theme ${theme_name}, uInitrd in sync"
+}
+
+build_initramfs() {
+    local kver theme_name initrd
+    kver="$(image_kernel_version)"
+    theme_name="$(basename "${SMARTPAD_PLYMOUTH_THEME}")"
+    initrd="/boot/initrd.img-${kver}"
+    if [[ ! -f "${initrd}" ]]; then
+        echo_red "${initrd} missing in the base image"
+        return 1
+    fi
+    echo_green "Generating ${initrd} (kernel ${kver}) with the ${theme_name} theme..."
+    # -k: never rely on the version lookup, it does not see the image kernel in a chroot
+    update-initramfs -u -k "${kver}"
+    verify_initramfs "${initrd}" "${theme_name}"
 }
 
 sudo -u "${BASE_USER}" git clone "${SMARTPAD_PLYMOUTH_REPO}"
 install_plymouth_theme
+build_initramfs
 popd &>/dev/null || exit 1
 echo_green "Install Yumi Lab Plymouth theme... [DONE]"
+
+## Step 3b: splash from the first boot — the theme is embedded now (this used to be
+## flipped by the wizard, after its on-device initramfs rebuild)
+echo_green "Enable Plymouth boot logo..."
+sed -i '/^bootlogo=/d' "${SMARTPAD_CONFIG_TXT_FILE}"
+echo "bootlogo=true" >> "${SMARTPAD_CONFIG_TXT_FILE}"
+echo_green "Enable Plymouth boot logo... [DONE]"
 
 ## Step 4: YUMI_SYNC
 echo_green "Install YUMI_SYNC ..."

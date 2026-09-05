@@ -15,8 +15,12 @@
 ####    checked individually. Inside a step we use a subshell with "set -e" so the
 ####    step stops at the first failing command and reports a real exit code.
 ####
-#### Steps: rotation → boot logo → free RAM → compile MCU → initramfs (Plymouth)
-####        → enable KlipperScreen → finalize → reboot.
+#### Steps: rotation → free RAM → compile MCU → enable KlipperScreen → finalize → reboot.
+####
+#### The Plymouth theme and the initramfs are built into the image (smartpad module):
+#### nothing boot-related is regenerated on the device anymore. The on-device
+#### `update-initramfs -u` that used to live here left pads un-bootable (kernel panic
+#### "Attempted to kill init! exitcode=0x00007f00" after init-bottom).
 
 LOG="/var/log/yumi-firstboot.log"
 : > "${LOG}"
@@ -27,7 +31,7 @@ DIALOG="$(which dialog)"
 DIALOG=("${DIALOG}" --backtitle "YumiOS First Boot Setup")
 RESOLUTION=(20 60)
 
-TOTAL=7
+TOTAL=5
 STEP=0
 
 log() { echo "[$(date '+%H:%M:%S')] $*" >>"${LOG}"; }
@@ -35,7 +39,7 @@ log() { echo "[$(date '+%H:%M:%S')] $*" >>"${LOG}"; }
 # Make the wizard visible on the pad's console.
 chvt 2 2>>"${LOG}" || log "chvt 2 failed (non bloquant)"
 
-# Long steps (MCU compile, initramfs) run for minutes without keyboard input:
+# The MCU compile runs for minutes without keyboard input:
 # disable console blanking so the screen never goes dark mid-wizard.
 setterm --blank 0 --powerdown 0 2>>"${LOG}" >/dev/tty2 || log "setterm blank off failed (non bloquant)"
 
@@ -162,16 +166,6 @@ XCONF
     fi
 )
 
-step_bootlogo() (
-    set -e
-    if [[ -f /boot/armbianEnv.txt ]]; then
-        sed -i 's/bootlogo=false/bootlogo=true/' /boot/armbianEnv.txt
-        echo "bootlogo enabled"
-    else
-        echo "no /boot/armbianEnv.txt — skipped"
-    fi
-)
-
 step_free_ram() (
     set -e
     # yumi-anc pulls python3-scipy (numpy/BLAS) loaded by Klipper. These services
@@ -224,12 +218,6 @@ step_mcu() (
     echo "MCU compiled OK"
 )
 
-step_initramfs() (
-    set -e
-    timeout 600 update-initramfs -u
-    echo "initramfs regenerated (Plymouth theme embedded)"
-)
-
 step_enable_ks() (
     set -e
     systemctl enable KlipperScreen.service
@@ -266,14 +254,9 @@ fi
 "${DIALOG[@]}" --clear --title "YumiOS First Boot" \
     --no-cancel --no-ok --pause "$(welcome_msg)" "${RESOLUTION[@]}" 15
 
-# bootlogo APRES initramfs : ne jamais activer le splash avant que le theme
-# Plymouth soit embarque (une coupure de courant entre les deux laisserait un
-# boot avec splash actif mais initramfs sans theme = framebuffer vide).
 run_step "Rotation de l'ecran"            step_rotation
 run_step "Liberation de la RAM"           step_free_ram
 run_step "Compilation MCU GPIO"           step_mcu
-run_step "Generation de l'initramfs"      step_initramfs
-run_step "Logo de demarrage (Plymouth)"   step_bootlogo
 run_step "Activation de KlipperScreen"    step_enable_ks
 run_step "Finalisation"                   step_finalize
 
