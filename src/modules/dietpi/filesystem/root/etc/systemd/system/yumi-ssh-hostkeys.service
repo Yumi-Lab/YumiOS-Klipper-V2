@@ -1,0 +1,17 @@
+[Unit]
+Description=Generate the SSH host keys of this pad
+# The keys created by the openssh-server install at image build time are deleted
+# from the image: every pad must have its own. Debian's own sshd-keygen.service
+# cannot do it here — it carries ConditionFirstBoot=yes, and /etc/machine-id is
+# already populated in the image, so systemd never considers a pad's first boot a
+# "first boot": sshd -t then fails on the missing keys and ssh.service restarts in
+# a loop forever (seen in QEMU and on the first DietPi pad: 80 and 7125 open, 22 closed).
+Before=ssh.service
+ConditionPathExists=!/etc/ssh/ssh_host_ed25519_key
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/ssh-keygen -A
+
+[Install]
+WantedBy=multi-user.target

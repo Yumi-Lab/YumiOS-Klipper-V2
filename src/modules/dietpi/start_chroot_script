@@ -1,0 +1,163 @@
+#!/usr/bin/env bash
+#### dietpi module — adapt the DietPi-SmartPi base image to the YumiOS Klipper stack
+####
+#### Base: Yumi-Lab/DietPi-SmartPi = the SmartPi-armbian server image converted by the
+#### official DietPi installer (HW_MODEL=25). Same U-Boot, kernel, DTB, armbianEnv.txt
+#### and FAT /boot as the Armbian base, but the installer reshaped the userland:
+####
+####  - ifupdown + wpa_supplicant replaced NetworkManager. The whole YumiOS WiFi stack
+####    is NM-based (sonar dispatcher, KlipperScreen network panel, yumi-config), so NM
+####    comes back and owns every interface: /etc/network/interfaces keeps the loopback
+####    only, which also keeps dietpi-firstboot / dietpi-config away from eth0/wlan0.
+####  - Dropbear replaced OpenSSH → OpenSSH again (SAV reverse tunnel, sftp); the
+####    build-time host keys are deleted, yumi-ssh-hostkeys.service makes per-device ones.
+####  - /var/log became a 50 MB tmpfs (dietpi-ramlog) → full on-disk logs + rsyslog,
+####    like the Armbian base: a pad is debugged after the fact from its logs.
+####  - swap: DietPi creates a swapfile on the SD card at first boot → zram instead
+####    (what armbian-zram-config did).
+####  - first run: AUTO_SETUP_AUTOMATED=1 chains dietpi-update + dietpi-software +
+####    reboot on the tty1 autologin, needs network and fights the YumiOS firstboot
+####    wizard → only dietpi-firstboot is kept (hostname, passwords, locale, timezone,
+####    root filesystem expansion) and the DietPi first run is marked completed right
+####    after it (systemd drop-in).
+####  - CPU governor: cpufrequtils is no longer read; dietpi-preboot applies dietpi.txt
+####    at every boot → handled by the cpu_governor module through yumi-dietpi-txt.
+####
+#### This module runs right after base, BEFORE the armbian module: OpenSSH must exist
+#### when armbian hardens sshd_config, NetworkManager when it drops its conf.d files.
+
+# shellcheck enable=require-variable-braces
+set -Ee
+
+# shellcheck disable=SC1091
+source /common.sh
+install_cleanup_trap
+
+if [[ ! -f "${DIETPI_TXT}" ]]; then
+    echo_red "${DIETPI_TXT} not found — this is not a DietPi base image"
+    exit 1
+fi
+
+echo_green "Adapting the DietPi base to YumiOS ..."
+
+## Step 1: files (dietpi.txt helper, first-run drop-in, sshd hardening, host keys unit, NM usb0 exclusion)
+unpack /filesystem/root /
+chmod 755 /usr/local/sbin/yumi-dietpi-txt
+
+## Step 2: OpenSSH replaces Dropbear
+### The base module appended its "IPQoS throughput" tweak to /etc/ssh/{sshd,ssh}_config
+### before any OpenSSH package existed on this rootfs, which created 1-line stubs. dpkg
+### would keep such a stub as the "locally modified" conffile and shelve the real one as
+### .dpkg-dist: stash the stubs, let the packages lay down their pristine conffiles, then
+### re-append the stub lines.
+declare -A ssh_stubs=()
+for cfg in /etc/ssh/sshd_config /etc/ssh/ssh_config; do
+    if [[ -f "${cfg}" ]] && ! dpkg -S "${cfg}" &>/dev/null; then
+        ssh_stubs["${cfg}"]="$(cat "${cfg}")"
+        rm -f "${cfg}"
+    fi
+done
+### DietPi points Dir::Cache at /tmp/apt but keeps Dir::Cache::archives under
+### /var/cache/apt (99-dietpi-cache). CustomPiOS bind-mounts its empty build cache over
+### /var/cache/apt, and apt only auto-creates archives/partial below Dir::Cache — so the
+### first apt run dies with "Archives directory /var/cache/apt/archives/partial is
+### missing" unless the directory is there.
+mkdir -p /var/cache/apt/archives/partial
+### Dropbear goes first: two SSH servers on port 22 is one too many
+for pkg in ${DIETPI_PURGE_PKGS}; do
+    if [[ "$(is_installed "${pkg}")" -eq 1 ]]; then
+        apt-get purge --yes "${pkg}"
+    fi
+done
+apt-get update
+# shellcheck disable=SC2086
+check_install_pkgs ${DIETPI_DEPS}
+for cfg in "${!ssh_stubs[@]}"; do
+    printf '%s\n' "${ssh_stubs[${cfg}]}" >> "${cfg}"
+done
+### Host keys are per device: drop the build-time ones and regenerate them on the pad.
+### Not with Debian's sshd-keygen.service: it has ConditionFirstBoot=yes, which is never
+### true on an image whose /etc/machine-id is populated — sshd would fail on the missing
+### keys and ssh.service would restart forever (first DietPi pad: SSH dead).
+rm -f /etc/ssh/ssh_host_*
+systemctl_if_exists enable ssh.service
+systemctl_if_exists enable yumi-ssh-hostkeys.service
+
+## Step 3: NetworkManager owns every interface
+cat > /etc/network/interfaces << 'IFACES'
+# YumiOS: NetworkManager manages every interface (Debian's NM ignores the ones
+# listed here, /etc/NetworkManager/NetworkManager.conf [ifupdown] managed=false).
+# Only the loopback stays with ifupdown, so dietpi-firstboot and dietpi-config
+# never configure eth0/wlan0 behind NetworkManager's back.
+source /etc/network/interfaces.d/*
+
+auto lo
+iface lo inet loopback
+IFACES
+rm -f /etc/network/interfaces.d/*
+systemctl_if_exists enable NetworkManager.service
+systemctl_if_exists disable dietpi-wifi-monitor.service
+### The installer blacklists cfg80211 (WIFI_REQUIRED aside, it ships the image with
+### WiFi off) and only dietpi-firstboot lifts it, on the pad's first boot. WiFi is a
+### core feature here, so do not leave it to a first-boot script.
+rm -f /etc/modprobe.d/dietpi-disable_wifi.conf
+
+## Step 4: logs on disk (Armbian parity), no DietPi ramlog
+sed -i '\#[[:blank:]]/var/log[[:blank:]]#d' /etc/fstab
+systemctl_if_exists disable dietpi-ramlog.service
+systemctl_if_exists enable rsyslog.service
+
+## Step 5: zram swap instead of a swapfile on the SD card
+sed -i "s/^#\? *PERCENT=.*/PERCENT=${DIETPI_ZRAM_PERCENT}/" /etc/default/zramswap
+grep -q "^PERCENT=${DIETPI_ZRAM_PERCENT}$" /etc/default/zramswap || echo "PERCENT=${DIETPI_ZRAM_PERCENT}" >> /etc/default/zramswap
+systemctl_if_exists enable zramswap.service
+
+## Step 6: dietpi.txt — what dietpi-firstboot applies on the pad's first boot
+yumi-dietpi-txt AUTO_SETUP_AUTOMATED 0            # no dietpi-update/dietpi-software/reboot chain, no tty1 root autologin
+yumi-dietpi-txt AUTO_SETUP_NET_HOSTNAME "${BASE_OVERRIDE_HOSTNAME}"
+yumi-dietpi-txt AUTO_SETUP_GLOBAL_PASSWORD "${BASE_USER_PASSWORD}"   # root password = the pi one
+yumi-dietpi-txt AUTO_SETUP_LOCALE "${DIETPI_LOCALE}"
+yumi-dietpi-txt AUTO_SETUP_KEYBOARD_LAYOUT "${DIETPI_KEYBOARD}"
+yumi-dietpi-txt AUTO_SETUP_TIMEZONE "${DIETPI_TIMEZONE}"
+yumi-dietpi-txt AUTO_SETUP_SSH_SERVER_INDEX -2    # -2 = OpenSSH, so dietpi-software never brings Dropbear back
+yumi-dietpi-txt AUTO_SETUP_LOGGING_INDEX 0        # 0 = no ramlog
+yumi-dietpi-txt AUTO_SETUP_SWAPFILE_SIZE 0        # zram above, no /var/swap
+yumi-dietpi-txt AUTO_SETUP_NET_WIFI_ENABLED 1     # keeps the WiFi kernel modules enabled (NM needs them)
+yumi-dietpi-txt SURVEY_OPTED_IN 0
+yumi-dietpi-txt CONFIG_CHECK_DIETPI_UPDATES 0     # Moonraker's update manager is the only updater on a pad
+yumi-dietpi-txt CONFIG_CHECK_APT_UPDATES 0
+yumi-dietpi-txt CONFIG_NTP_MODE 4                 # systemd-timesyncd as a daemon (printers stay on for days)
+
+## Step 7: armbianEnv.txt — undo what the installer changed in the kernel command line
+: "${ARMBIAN_CONFIG_TXT_FILE:?armbian module config not loaded}"
+### console verbosity (4 scribbles over the Plymouth splash; Armbian's default is 1)
+sed -i '/^verbosity=/d' "${ARMBIAN_CONFIG_TXT_FILE}"
+echo "verbosity=${DIETPI_VERBOSITY}" >> "${ARMBIAN_CONFIG_TXT_FILE}"
+### net.ifnames=0 renames the H3 Ethernet port end0 → eth0. The YumiOS stack keys on
+### end0: the YUMI ID shown by KlipperScreen and printed by the QC wizard is the MAC of
+### end0, YUMI_SYNC reads it too — on the first DietPi pad the ID came up "UNKNOWN".
+### Predictable names also keep USB WiFi dongles as wlx*, which the sonar dispatcher
+### matches. Same naming as the Armbian base, same identity for the same board.
+sed -i -E 's/^(extraargs=.*)[[:space:]]net\.ifnames=0/\1/; s/^extraargs=net\.ifnames=0[[:space:]]*/extraargs=/' "${ARMBIAN_CONFIG_TXT_FILE}"
+if grep -q "net.ifnames=0" "${ARMBIAN_CONFIG_TXT_FILE}"; then
+    echo_red "net.ifnames=0 still present in ${ARMBIAN_CONFIG_TXT_FILE}"
+    exit 1
+fi
+
+## Step 8: leftovers of the conversion
+### dangling symlink to a unit the installer removed with the Armbian BSP
+rm -f /etc/systemd/system/multi-user.target.wants/armbian-firstrun.service
+### DietPi masks systemd-logind to save a few MB (AUTO_UNMASK_LOGIND=0). The Armbian base
+### runs it, and without it every login logs "pam_systemd: Failed to create session" and
+### anything asking logind for a session (polkit, loginctl, X sessions) works by accident
+### or not at all. Same userland as Armbian: logind on.
+systemctl_if_exists unmask systemd-logind.service
+yumi-dietpi-txt AUTO_UNMASK_LOGIND 1
+### The DietPi installer enabled a serial getty on every /dev/ttyS* of the machine
+### that ran the conversion — ttyS0 to ttyS31 on a GitHub runner. On the pad that
+### means 29 units timing out at boot, and agetty grabbing ttyS1/ttyS2, the UARTs the
+### uart1/uart2 overlays expose for Klipper peripherals. The kernel console
+### (console=ttyS0 from boot.cmd) gets its getty from systemd-getty-generator anyway.
+rm -f /etc/systemd/system/getty.target.wants/serial-getty@ttyS*.service
+
+echo_green "Adapting the DietPi base to YumiOS ... [DONE]"

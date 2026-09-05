@@ -69,7 +69,6 @@ jobs:
 
       - name: Rename image file
         id: move-image
-        if: always()
         shell: bash
         run: |
           source repository/src/config

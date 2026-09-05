@@ -18,8 +18,10 @@ buildtest:
   # YumiOS-Klipper-V2: SmartPi ONE (armhf)
   - armbian/smartpi-debian
   - armbian/smartpi-trixie
+  - dietpi/smartpi-trixie
 
 release:
   # YumiOS-Klipper-V2: SmartPi ONE (armhf)
   - armbian/smartpi-debian
   - armbian/smartpi-trixie
+  - dietpi/smartpi-trixie

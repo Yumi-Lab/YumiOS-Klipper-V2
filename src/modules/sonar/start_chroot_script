@@ -13,6 +13,32 @@ set -Ee
 source /common.sh
 install_cleanup_trap
 
+# --- Transient-network resilience -------------------------------------------
+# Retry a command up to 5 times with a 10s backoff. NO silent failure: after the
+# last attempt we return non-zero so set -e aborts the build (no "|| true").
+retry() {
+    local -i attempt=1 max_attempts=5 delay=10
+    while true; do
+        if "$@"; then
+            return 0
+        fi
+        if (( attempt >= max_attempts )); then
+            echo_red "Command failed after ${max_attempts} attempts: $*"
+            return 1
+        fi
+        echo_yellow "Attempt ${attempt}/${max_attempts} failed, retrying in ${delay}s ..."
+        sleep "${delay}"
+        attempt+=1
+    done
+}
+
+# Clone the sonar fork from scratch each attempt (a half-cloned dir would make
+# a retry fail on "destination path already exists").
+clone_sonar() {
+    rm -rf "/home/${BASE_USER}/sonar"
+    gitclone SONAR_REPO sonar
+}
+
 mkdir -p /tmp
 chmod 1777 /tmp
 
@@ -22,16 +48,16 @@ SR_BUILD_PACKAGE_FILE="/tmp/sr_packages.lst"
 echo_green "Installing sonar ..."
 
 ## Force apt update
-apt-get update
+retry apt-get update
 ## Make sure 'git' is installed!
-check_install_pkgs git
+retry check_install_pkgs git
 
 ## Step 1: Move to Home Dir as WorkingDirectoy
 pushd "/home/${BASE_USER}" &> /dev/null || exit 1
 
 ## Step 2: clone sonar repo
 echo_green "Clone sonar repository ..."
-gitclone SONAR_REPO sonar
+retry clone_sonar
 
 ## Step 3: Set SONAR_DEPS manually
 echo_green "Manually defining SONAR_DEPS ..."
@@ -40,7 +66,7 @@ SONAR_DEPS="network-manager wireless-tools iw rfkill ethtool curl net-tools"
 ## Step 4: Install packages
 echo_green "Install sonar dependencies ..."
 # shellcheck disable=SC2086
-check_install_pkgs ${SONAR_DEPS}
+retry check_install_pkgs ${SONAR_DEPS}
 
 ## Step 5: Move to sonar as working directory
 pushd "/home/${BASE_USER}/sonar" &> /dev/null || exit 1
@@ -63,7 +89,12 @@ make install || { echo_red "Sonar install failed"; exit 1; }
 popd &> /dev/null || exit 1
 
 ## Step 8: Override sonar.conf — enable + tuned for NetworkManager
-echo_green "Writing sonar.conf (enabled, 30s interval) ..."
+## Reactivity: sonar polls the default route every `interval` seconds and, after
+## `dongle_recovery_threshold` cycles without one, runs its recovery (nmcli reconnect,
+## driver reload only if the adapter sees no AP). 30 s x 3 gave a first attempt 90 s
+## after the loss and ~10 min to be back on the bench; 15 s x 2 = 30 s. Not shorter:
+## the recovery itself takes ~80 s and hammering the RTL8188EU dongle wedges it.
+echo_green "Writing sonar.conf (enabled, 15s interval, recovery after 2 cycles) ..."
 cat <<'SONAREOF' > "/home/${BASE_USER}/printer_data/config/sonar.conf"
 [sonar]
 enable: true
@@ -71,13 +102,10 @@ debug_log: false
 persistent_log: false
 target: auto
 count: 3
-interval: 30
-restart_threshold: 5
+interval: 15
+restart_threshold: 3
 dongle_recovery: true
-dongle_recovery_threshold: 3
-tcp_fallback: true
-tcp_check_host: 1.1.1.1
-tcp_check_port: 443
+dongle_recovery_threshold: 2
 SONAREOF
 chown "${BASE_USER}:${BASE_USER}" "/home/${BASE_USER}/printer_data/config/sonar.conf"
 
@@ -112,7 +140,7 @@ else
   echo_red "  moonraker.conf not found — update_manager entry skipped."
 fi
 
-## Step 9: NetworkManager WiFi auto-reconnect dispatcher
+## Step 9: NetworkManager WiFi dispatcher — auto-reconnect on down, infinite retries on up
 echo_green "Installing NetworkManager WiFi reconnect dispatcher ..."
 cat <<'DISPEOF' > /etc/NetworkManager/dispatcher.d/99-wifi-reconnect
 #!/usr/bin/env bash
@@ -122,36 +150,67 @@ cat <<'DISPEOF' > /etc/NetworkManager/dispatcher.d/99-wifi-reconnect
 IFACE="$1"
 ACTION="$2"
 
-# Only act on WiFi interfaces going down
+# Only act on WiFi interfaces
 # wlan*/wlp* = onboard, wlx* = USB dongles (named after MAC, e.g. wlx40a5ef1307ee)
 case "$IFACE" in wlan*|wlp*|wlx*) ;; *) exit 0 ;; esac
 
-if [ "$ACTION" = "down" ]; then
-    logger -t wifi-reconnect "WiFi $IFACE went down, scheduling reconnect ..."
-    # Wait a bit then ask NM to re-activate
-    (
-        sleep 5
-        # Unblock the radio first — a soft-blocked / wedged dongle can no
-        # longer scan, so a plain "device connect" silently does nothing.
-        rfkill unblock wifi 2>/dev/null
-        nmcli radio wifi on 2>/dev/null
-        nmcli device set "$IFACE" managed yes 2>/dev/null
-        sleep 2
-        nmcli device connect "$IFACE" 2>/dev/null \
-            || { nmcli networking off; sleep 2; nmcli networking on; }
-        logger -t wifi-reconnect "WiFi reconnect attempt done for $IFACE"
-    ) &
+# Every saved WiFi profile must be retried forever by NetworkManager itself: with
+# the default (4 retries) NM gives up when the access point is away for two minutes
+# at boot and the pad sits offline until someone opens the network panel.
+# NetworkManager.conf cannot set that default (the key is not a connection default
+# on NM 1.52), so it is set on the profiles themselves, every time an interface
+# comes up — a sweep, so profiles saved by KlipperScreen that never managed to
+# connect yet are covered too. Idempotent: profiles already at 0 are left alone.
+if [ "$ACTION" = "up" ]; then
+    nmcli -t -g UUID,TYPE,NAME connection show 2>/dev/null | while IFS=: read -r uuid type name; do
+        [ "$type" = "802-11-wireless" ] || continue
+        [ "$(nmcli -g connection.autoconnect-retries connection show uuid "$uuid" 2>/dev/null)" = "0" ] && continue
+        nmcli connection modify uuid "$uuid" connection.autoconnect-retries 0 \
+            && logger -t wifi-reconnect "'$name' now retried forever by NetworkManager"
+    done
+    exit 0
 fi
+
+[ "$ACTION" = "down" ] || exit 0
+
+logger -t wifi-reconnect "WiFi $IFACE went down, scheduling reconnect ..."
+(
+    # Single instance for the whole retry window: a "down" event also fires
+    # when our own reconnect replaces an in-flight activation
+    # ("new-activation"), so without a lock this script feeds itself an
+    # endless activation storm.
+    exec 9>/run/wifi-reconnect.lock
+    flock -n 9 || exit 0
+    sleep 8
+    # If NM is already (re)connecting the device, do NOT interrupt it:
+    # "nmcli device connect" on an activating device aborts the in-flight
+    # activation (reason 'new-activation') and the link never settles.
+    state=$(nmcli -g GENERAL.STATE device show "$IFACE" 2>/dev/null | head -1)
+    case "$state" in
+        ""|*unmanaged*) : ;;          # device vanished or unmanaged: try to recover below
+        *disconnected*|*unavailable*) : ;;
+        *) logger -t wifi-reconnect "NM already handling $IFACE ($state), leaving it alone"; exit 0 ;;
+    esac
+    # Unblock the radio first — a soft-blocked / wedged dongle can no
+    # longer scan, so a plain "device connect" silently does nothing.
+    rfkill unblock wifi 2>/dev/null
+    nmcli radio wifi on 2>/dev/null
+    nmcli device set "$IFACE" managed yes 2>/dev/null
+    sleep 2
+    # NEVER "nmcli networking off/on" here: it tears down ALL interfaces,
+    # including ethernet — a failed WiFi retry must not kill a working LAN.
+    nmcli device connect "$IFACE" 2>/dev/null \
+        || logger -t wifi-reconnect "reconnect failed for $IFACE (NM autoconnect keeps retrying)"
+    logger -t wifi-reconnect "WiFi reconnect attempt done for $IFACE"
+) >/dev/null 2>&1 &
 DISPEOF
 chmod 755 /etc/NetworkManager/dispatcher.d/99-wifi-reconnect
 
-## Step 10: Force autoconnect on all future WiFi connections
-echo_green "Configuring NetworkManager autoconnect ..."
-cat <<'NMEOF' > /etc/NetworkManager/conf.d/wifi-autoconnect.conf
-[connection]
-# Retry WiFi connection indefinitely (0 = infinite retries)
-connection.autoconnect-retries=0
-NMEOF
+## Step 10: (autoconnect retries are set per profile by the dispatcher above:
+## NetworkManager 1.52 logs "config: unknown key 'connection.autoconnect-retries'"
+## for a [connection] default in NetworkManager.conf and ignores it — seen on the
+## first DietPi pad, which gave up after 4 retries at boot)
+rm -f /etc/NetworkManager/conf.d/wifi-autoconnect.conf
 
 ## Step 11: clean packages.lst file
 rm -f "${SR_BUILD_PACKAGE_FILE}"

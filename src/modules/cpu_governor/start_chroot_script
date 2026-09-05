@@ -1,26 +1,39 @@
 #!/usr/bin/env bash
-#### CPU Governor — set to userspace for Klipper stability
+#### CPU Governor — one fixed frequency for Klipper stability
 ####
-#### Dynamic frequency scaling causes Klipper USB/MCU disconnections.
-#### Use Armbian's native /etc/default/cpufrequtils to lock governor.
-####
+#### Dynamic frequency scaling causes Klipper USB/MCU disconnections. The value lives
+#### in this module's config (CPU_GOVERNOR_FREQ_KHZ) and is applied through whatever
+#### mechanism the base image uses at boot.
 
 # shellcheck enable=require-variable-braces
+set -Ee
+
 # shellcheck disable=SC1091
 source /common.sh
 install_cleanup_trap
 
-echo_green "Setting CPU governor to userspace..."
+echo_green "Pinning the CPU at ${CPU_GOVERNOR_FREQ_KHZ} kHz ..."
 
-cat > /etc/default/cpufrequtils << 'CPUCONF'
+## Armbian: native /etc/default/cpufrequtils (read by armbian-hardware-optimization)
+cat > /etc/default/cpufrequtils << CPUCONF
 ENABLE=true
-MIN_SPEED=960000
-MAX_SPEED=960000
-GOVERNOR=userspace
+MIN_SPEED=${CPU_GOVERNOR_FREQ_KHZ}
+MAX_SPEED=${CPU_GOVERNOR_FREQ_KHZ}
+GOVERNOR=${CPU_GOVERNOR_ARMBIAN_GOVERNOR}
 CPUCONF
+
+## DietPi: dietpi.txt, re-applied by dietpi-preboot at every boot. yumi-dietpi-txt is
+## installed by the dietpi module only, so its presence identifies a DietPi base.
+if [[ -x /usr/local/sbin/yumi-dietpi-txt ]]; then
+    freq_mhz=$(( CPU_GOVERNOR_FREQ_KHZ / 1000 ))
+    yumi-dietpi-txt CONFIG_CPU_GOVERNOR "${CPU_GOVERNOR_DIETPI_GOVERNOR}"
+    yumi-dietpi-txt CONFIG_CPU_MAX_FREQ "${freq_mhz}"
+    yumi-dietpi-txt CONFIG_CPU_MIN_FREQ "${freq_mhz}"
+    echo_green "DietPi: ${CPU_GOVERNOR_DIETPI_GOVERNOR} governor pinned at ${freq_mhz} MHz"
+fi
 
 # Clean up old custom service and script if present
 rm -f /etc/systemd/system/set-cpu-freq.service
 rm -f /usr/local/bin/set_cpu_freq.sh
 
-echo_green "CPU governor set to userspace ... [DONE]"
+echo_green "Pinning the CPU at ${CPU_GOVERNOR_FREQ_KHZ} kHz ... [DONE]"

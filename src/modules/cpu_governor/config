@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# Shebang for better file detection
+#### cpu_governor module — fixed CPU frequency for Klipper
+#### Frequency scaling breaks the USB/MCU timing and disconnects Klipper: one
+#### frequency, forever, on every core. 960 MHz is thermally stable on the H3 and
+#### enough for Klipper's real-time work.
+# shellcheck disable=all
+
+# The one and only place the frequency is defined (kHz)
+[ -n "$CPU_GOVERNOR_FREQ_KHZ" ] || CPU_GOVERNOR_FREQ_KHZ=960000
+
+# Armbian base: /etc/default/cpufrequtils, applied by armbian-hardware-optimization
+[ -n "$CPU_GOVERNOR_ARMBIAN_GOVERNOR" ] || CPU_GOVERNOR_ARMBIAN_GOVERNOR="userspace"
+
+# DietPi base: dietpi.txt, applied by dietpi-preboot (dietpi-set_cpu) at every boot.
+# dietpi-set_cpu writes the governor name and min/max only, never scaling_setspeed,
+# so "userspace" would leave the frequency undefined there: pin min = max instead.
+[ -n "$CPU_GOVERNOR_DIETPI_GOVERNOR" ] || CPU_GOVERNOR_DIETPI_GOVERNOR="performance"

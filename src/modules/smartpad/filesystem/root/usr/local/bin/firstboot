@@ -1,20 +1,29 @@
 #!/usr/bin/env bash
-#### firstboot actions — YumiOS SmartPad/SmartPi ONE
+#### firstboot actions — YumiOS SmartPad / SmartPi ONE
 ####
-#### Runs once at first boot:
-#### - Detects display type (800x480 = SmartPad → rotation 180°)
-#### - Applies console rotation BEFORE showing wizard (correct orientation)
-#### - Configures persistent rotation (armbianEnv.txt + Xorg)
-#### - Enables Plymouth boot logo
-#### - Compiles Klipper Linux MCU for GPIO (native to current distro)
-#### - Generates initramfs
-#### - Enables KlipperScreen
-#### - Disables itself
-#### - Reboots
+#### Observable, step-by-step first-boot setup.
+####
+#### Design goals (debuggable on purpose):
+####  - every step is shown on screen, numbered ("Etape X/N : <titre>"), so you
+####    can SEE exactly which step the device is on (and where it blocks).
+####  - every command output is captured to /var/log/yumi-firstboot.log — nothing
+####    is sent to /dev/null. The log survives across reboots (read it over SSH).
+####  - on ANY failure the wizard STOPS on a readable error screen showing the
+####    failed step + the tail of the log. It does NOT go black and does NOT
+####    reboot, so the error can be photographed on the pad and inspected via SSH.
+####  - NO global "set -e" that kills the wizard silently: each step is run and
+####    checked individually. Inside a step we use a subshell with "set -e" so the
+####    step stops at the first failing command and reports a real exit code.
+####
+#### Steps: rotation → free RAM → compile MCU → enable KlipperScreen → finalize → reboot.
+####
+#### The Plymouth theme and the initramfs are built into the image (smartpad module):
+#### nothing boot-related is regenerated on the device anymore. The on-device
+#### `update-initramfs -u` that used to live here left pads un-bootable (kernel panic
+#### "Attempted to kill init! exitcode=0x00007f00" after init-bottom).
 
-set -e
-
-echo "Starting firstboot script..."
+LOG="/var/log/yumi-firstboot.log"
+: > "${LOG}"
 
 DIALOGRC=/.firstboot
 export DIALOGRC
@@ -22,75 +31,40 @@ DIALOG="$(which dialog)"
 DIALOG=("${DIALOG}" --backtitle "YumiOS First Boot Setup")
 RESOLUTION=(20 60)
 
-# Change active tty for dialog display
-chvt 2
+TOTAL=5
+STEP=0
 
-# Stop KlipperScreen if running (it would conflict with dialog on TTY)
+log() { echo "[$(date '+%H:%M:%S')] $*" >>"${LOG}"; }
+
+# Make the wizard visible on the pad's console.
+chvt 2 2>>"${LOG}" || log "chvt 2 failed (non bloquant)"
+
+# The MCU compile runs for minutes without keyboard input:
+# disable console blanking so the screen never goes dark mid-wizard.
+setterm --blank 0 --powerdown 0 2>>"${LOG}" >/dev/tty2 || log "setterm blank off failed (non bloquant)"
+
+# Stop KlipperScreen if it is somehow running (it would fight dialog on the TTY).
 if [[ "$(systemctl is-active KlipperScreen.service 2>/dev/null)" = "active" ]]; then
-    systemctl stop KlipperScreen.service &>/dev/null
+    systemctl stop KlipperScreen.service 2>>"${LOG}" || log "stop KlipperScreen failed (non bloquant)"
 fi
 
 needs_rotation() {
-    # The original SmartPad 7" LCD is 800x480 and requires 180° rotation
-    # due to connector position. Future screens with different resolution
-    # or factory-rotated HDMI chip don't need it.
+    # The original SmartPad 7" LCD is 800x480 and requires 180 rotation due to
+    # connector position. Future screens with another resolution don't need it.
     local resolution
     resolution="$(cat /sys/class/graphics/fb0/virtual_size 2>/dev/null)"
-    if [[ "${resolution}" == "800,480" ]]; then
-        echo "1"
-    else
-        echo "0"
-    fi
+    if [[ "${resolution}" == "800,480" ]]; then echo "1"; else echo "0"; fi
 }
 
 apply_live_console_rotation() {
-    # Rotate the console framebuffer 180° RIGHT NOW (before wizard display)
-    # This makes the wizard appear in the correct orientation
     for fbcon in /sys/class/graphics/fbcon/rotate_all /sys/class/graphics/fb0/rotate; do
         if [[ -f "${fbcon}" ]]; then
             echo 2 > "${fbcon}" 2>/dev/null && return 0
         fi
     done
-    # Fallback: con2fbmap rotation via echo to each console
     if [[ -f /sys/module/fbcon/parameters/rotate_all ]]; then
         echo 2 > /sys/module/fbcon/parameters/rotate_all
     fi
-}
-
-apply_persistent_rotation() {
-    # Write rotation to armbianEnv.txt (applied at next boot)
-    local envfile="/boot/armbianEnv.txt"
-    if [[ -f "${envfile}" ]]; then
-        if ! grep -q "extraargs=.*fbcon=rotate:2" "${envfile}"; then
-            if grep -q "^extraargs=" "${envfile}"; then
-                sed -i 's/^extraargs=\(.*\)/extraargs=\1 fbcon=rotate:2/' "${envfile}"
-            else
-                echo "extraargs=fbcon=rotate:2" >> "${envfile}"
-            fi
-        fi
-    fi
-
-    # Xorg rotation for KlipperScreen (X11 display server)
-    mkdir -p /etc/X11/xorg.conf.d/
-    cat > /etc/X11/xorg.conf.d/90-smartpad-rotate.conf << 'XCONF'
-Section "Monitor"
-    Identifier "HDMI-1"
-    Option "Rotate" "inverted"
-EndSection
-XCONF
-}
-
-gen_initramfs() {
-    update-initramfs -u &>/dev/null
-}
-
-enable_ks() {
-    systemctl --quiet enable KlipperScreen.service &>/dev/null
-}
-
-disable_firstboot() {
-    systemctl --quiet disable firstboot.service &>/dev/null
-    rm -f /etc/systemd/system/firstboot.service
 }
 
 welcome_msg() {
@@ -118,77 +92,180 @@ Thank you for being patient and have fun with your
 EOF
 }
 
-# === STEP 0: Detect display and apply live rotation BEFORE wizard ===
-ROTATE="$(needs_rotation)"
-if [[ "${ROTATE}" == "1" ]]; then
-    echo "SmartPad 800x480 detected — applying live console rotation..."
-    apply_live_console_rotation
-fi
+# Non-blocking full-screen status — stays on screen while the step runs, so a
+# hung step leaves its own title visible ("where it blocks").
+# NEVER combine --clear with --infobox: dialog exits immediately after drawing
+# an infobox, and --clear erases the screen at exit — the box would flash for a
+# few milliseconds and leave a black screen for the whole step duration.
+show() {
+    local msg
+    printf -v msg '%b' "$1"
+    "${DIALOG[@]}" --infobox "${msg}" "${RESOLUTION[@]}"
+}
 
-# Set large font for readability
-if [[ -f /usr/share/consolefonts/Lat15-TerminusBold20x10.psf.gz ]]; then
-    setfont /usr/share/consolefonts/Lat15-TerminusBold20x10.psf.gz
-fi
+# Visible error screen. Shows the failed step + log tail, keeps the system up
+# (SSH possible), never reboots, stays on screen for debugging.
+halt_on_error() {
+    local title="$1" rc="$2" msg tail_txt
+    tail_txt="$(tail -n 8 "${LOG}" 2>/dev/null)"
+    log "STEP ${STEP}/${TOTAL} '${title}' FAILED (rc=${rc})"
+    printf -v msg 'Le premier demarrage a echoue ici :\n\n  Etape %d/%d : %s  (rc=%s)\n\n--- fin du journal (%s) ---\n%s\n\nLe pad reste allume (SSH possible), aucun reboot.' \
+        "${STEP}" "${TOTAL}" "${title}" "${rc}" "${LOG}" "${tail_txt}"
+    # No --clear (see show), and the box MUST fit the 80x24 console (Terminus
+    # 20x10 on 800x480) — an oversized box would not render at all.
+    "${DIALOG[@]}" --title "ECHEC etape ${STEP}/${TOTAL}" --infobox "${msg}" 22 76
+    while true; do sleep 3600; done
+}
 
-# === Wizard starts here — console is already in the correct orientation ===
+# Run one step: show its title, run it with full logging, stop on failure.
+run_step() {
+    local title="$1"; shift
+    STEP=$((STEP + 1))
+    log "===== STEP ${STEP}/${TOTAL}: ${title} ====="
+    show "Etape ${STEP}/${TOTAL}\n\n${title}\n\n(journal: ${LOG})"
+    # IMPORTANT: run as a standalone command (NOT "... || rc=$?"), otherwise bash
+    # disables `set -e` inside the called step subshell and a mid-step failure
+    # would slip through unnoticed.
+    local rc=0
+    "$@" >>"${LOG}" 2>&1
+    rc=$?
+    if [[ "${rc}" -ne 0 ]]; then
+        halt_on_error "${title}" "${rc}"
+    fi
+    log "STEP ${STEP}/${TOTAL} '${title}' OK"
+}
 
-"${DIALOG[@]}" --clear --title "YumiOS First Boot" \
-    --no-cancel --no-ok --pause "$(welcome_msg)" "${RESOLUTION[@]}" 15
+# ---------------------------------------------------------------------------
+# Step bodies — each runs in a subshell with set -e, so it stops (and returns
+# non-zero) at the first failing command.
+# ---------------------------------------------------------------------------
 
-# Step 1: Apply persistent rotation (for next boot)
-if [[ "${ROTATE}" == "1" ]]; then
-    apply_persistent_rotation
-    sleep 1 | "${DIALOG[@]}" --clear --gauge "Configuring display rotation (800x480) ..." "${RESOLUTION[@]}" 20
-else
-    sleep 1 | "${DIALOG[@]}" --clear --gauge "No rotation needed for this display ..." "${RESOLUTION[@]}" 20
-fi
+step_rotation() (
+    set -e
+    if [[ "${ROTATE}" == "1" ]]; then
+        echo "SmartPad 800x480 — applying persistent rotation"
+        local envfile="/boot/armbianEnv.txt"
+        if [[ -f "${envfile}" ]]; then
+            if ! grep -q "extraargs=.*fbcon=rotate:2" "${envfile}"; then
+                if grep -q "^extraargs=" "${envfile}"; then
+                    sed -i 's/^extraargs=\(.*\)/extraargs=\1 fbcon=rotate:2/' "${envfile}"
+                else
+                    echo "extraargs=fbcon=rotate:2" >> "${envfile}"
+                fi
+            fi
+        fi
+        mkdir -p /etc/X11/xorg.conf.d/
+        cat > /etc/X11/xorg.conf.d/90-smartpad-rotate.conf << 'XCONF'
+Section "Monitor"
+    Identifier "HDMI-1"
+    Option "Rotate" "inverted"
+EndSection
+XCONF
+    else
+        echo "No rotation needed for this display"
+    fi
+)
 
-# Step 2: Enable boot logo
-if [[ -f /boot/armbianEnv.txt ]]; then
-    sed -i 's/bootlogo=false/bootlogo=true/' /boot/armbianEnv.txt
-fi
-sleep 1 | "${DIALOG[@]}" --clear --gauge "Enabling boot logo ..." "${RESOLUTION[@]}" 40
+step_free_ram() (
+    set -e
+    # yumi-anc pulls python3-scipy (numpy/BLAS) loaded by Klipper. firstboot.service
+    # is ordered Before= the printer stack so these normally never start while the
+    # wizard runs; this step is the belt to that braces (an operator-started service,
+    # an older unit file) — nothing here must be active during the MCU compile.
+    echo "Free memory before:"; free -m || echo "(free unavailable)"
+    for svc in klipper moonraker crowsnest sonar moonraker-app-yumi-lab; do
+        # systemctl is-active sort en code 3 pour tout etat != active (inactive,
+        # activating, unknown) : sous set -e une affectation seule prendrait ce
+        # code et tuerait l'etape au premier service non actif (bug rc=3 vu sur
+        # pad). On garde quand meme la sortie texte qu'il imprime.
+        if ! state="$(systemctl is-active "${svc}.service" 2>/dev/null)"; then
+            state="${state:-inactive}"
+        fi
+        # "activating" too: these services start in parallel with the wizard
+        if [[ "${state}" == "active" || "${state}" == "activating" ]]; then
+            echo "stopping ${svc}.service (etat: ${state}) ..."
+            if ! systemctl stop "${svc}.service"; then
+                echo "WARN: stop ${svc} a echoue — on continue (compile juste plus lente)"
+            fi
+        fi
+    done
+    echo "Free memory after:"; free -m || echo "(free unavailable)"
+)
 
-# Step 3: Compile Klipper Linux MCU (native to current distro)
-if [[ -f /home/pi/klipper_linux.config ]]; then
-    "${DIALOG[@]}" --clear --infobox "Compiling Klipper MCU for GPIO...\n\nThis may take a few minutes.\nPlease wait..." "${RESOLUTION[@]}"
+step_mcu() (
+    set -e
+    if [[ ! -f /home/pi/klipper_linux.config ]]; then
+        echo "No klipper_linux.config — MCU already built, skipping."
+        exit 0
+    fi
+    # -j$(nproc) comme l'ancien wizard valide : la RAM est libre (services
+    # stoppes a l'etape precedente), et -j2 doublait le temps de compile.
+    local jobs
+    jobs="$(nproc)"
+    echo "Compiling Klipper Linux MCU with -j${jobs}"
     cd /home/pi/klipper
     git config --system --add safe.directory /home/pi/klipper
-    make clean &>/dev/null
+    timeout 120 make clean
     cp /home/pi/klipper_linux.config .config
-    make olddefconfig &>/dev/null
-    make -j"$(nproc)" &>/dev/null
+    timeout 60 make olddefconfig
+    # -j2 on the 1 GHz H3 takes noticeably longer than the old -j4 build:
+    # give it 15 min before declaring the step wedged.
+    timeout 900 make -j"${jobs}"
+    test -f out/klipper.elf
     rm -f /usr/local/bin/klipper_mcu
     cp out/klipper.elf /usr/local/bin/klipper_mcu
     chmod 755 /usr/local/bin/klipper_mcu
-    make clean &>/dev/null
-    rm -f .config
-    rm -f /home/pi/klipper_linux.config
-    sleep 1 | "${DIALOG[@]}" --clear --gauge "Klipper MCU compiled successfully ..." "${RESOLUTION[@]}" 55
-else
-    sleep 1 | "${DIALOG[@]}" --clear --gauge "Klipper MCU already installed ..." "${RESOLUTION[@]}" 55
+    rm -f .config /home/pi/klipper_linux.config
+    echo "MCU compiled OK"
+)
+
+step_enable_ks() (
+    set -e
+    systemctl enable KlipperScreen.service
+    echo "KlipperScreen enabled"
+)
+
+step_finalize() (
+    set -e
+    systemctl disable firstboot.service
+    rm -f /etc/systemd/system/firstboot.service
+    rm -f /.firstboot
+    echo "firstboot disabled"
+)
+
+# ---------------------------------------------------------------------------
+# Wizard
+# ---------------------------------------------------------------------------
+
+log "===== YumiOS firstboot started ====="
+
+# Detect display + live rotation BEFORE showing the wizard so it appears upright.
+ROTATE="$(needs_rotation)"
+log "display rotation needed: ${ROTATE}"
+if [[ "${ROTATE}" == "1" ]]; then
+    apply_live_console_rotation 2>>"${LOG}" || log "live rotation failed (non bloquant)"
 fi
 
-# Step 4: Generate initramfs
-gen_initramfs
-sleep 1 | "${DIALOG[@]}" --clear --gauge "Generating initramfs ..." "${RESOLUTION[@]}" 70
+# Larger console font for readability
+if [[ -f /usr/share/consolefonts/Lat15-TerminusBold20x10.psf.gz ]]; then
+    setfont /usr/share/consolefonts/Lat15-TerminusBold20x10.psf.gz 2>>"${LOG}" || log "setfont failed (non bloquant)"
+fi
 
-# Step 5: Enable KlipperScreen
-enable_ks
-sleep 1 | "${DIALOG[@]}" --clear --gauge "Enabling KlipperScreen ..." "${RESOLUTION[@]}" 85
+# Welcome (auto-advancing countdown, no keyboard needed)
+"${DIALOG[@]}" --clear --title "YumiOS First Boot" \
+    --no-cancel --no-ok --pause "$(welcome_msg)" "${RESOLUTION[@]}" 15
 
-# Step 6: Disable firstboot service
-disable_firstboot
-sleep 1 | "${DIALOG[@]}" --clear --gauge "Finalizing ..." "${RESOLUTION[@]}" 100
+run_step "Rotation de l'ecran"            step_rotation
+run_step "Liberation de la RAM"           step_free_ram
+run_step "Compilation MCU GPIO"           step_mcu
+run_step "Activation de KlipperScreen"    step_enable_ks
+run_step "Finalisation"                   step_finalize
 
-# Show reboot screen
+log "===== all steps OK — rebooting ====="
+
+# Done — reboot screen (auto-advancing)
 "${DIALOG[@]}" --clear --title "Setup Complete" \
     --no-cancel --no-ok --pause "$(reboot_msg)" "${RESOLUTION[@]}" 5
 
-# Cleanup
-rm -f /.firstboot
-
-# Reboot
 reboot
-
 exit 0

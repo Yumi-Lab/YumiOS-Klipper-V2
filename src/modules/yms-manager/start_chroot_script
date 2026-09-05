@@ -14,12 +14,38 @@ set -Ee
 source /common.sh
 install_cleanup_trap
 
+# --- Transient-network resilience -------------------------------------------
+# Retry a command up to 5 times with a 10s backoff. NO silent failure: after the
+# last attempt we return non-zero so set -e aborts the build (no "|| true").
+retry() {
+    local -i attempt=1 max_attempts=5 delay=10
+    while true; do
+        if "$@"; then
+            return 0
+        fi
+        if (( attempt >= max_attempts )); then
+            echo_red "Command failed after ${max_attempts} attempts: $*"
+            return 1
+        fi
+        echo_yellow "Attempt ${attempt}/${max_attempts} failed, retrying in ${delay}s ..."
+        sleep "${delay}"
+        attempt+=1
+    done
+}
+
+# Clone from scratch each attempt (a half-cloned dir would make a retry fail on
+# "destination path already exists").
+clone_yms() {
+    rm -rf "${YMS_MANAGER_DIR}"
+    sudo -u "${BASE_USER}" \
+        git clone --depth 1 -b "${YMS_MANAGER_REPO_BRANCH}" "${YMS_MANAGER_REPO_SHIP}" "${YMS_MANAGER_DIR}"
+}
+
 echo_green "Installing Yumi-YMS-Manager ..."
 
 ## Clone repo
 pushd "/home/${BASE_USER}" &>/dev/null || exit 1
-sudo -u "${BASE_USER}" \
-    git clone --depth 1 -b "${YMS_MANAGER_REPO_BRANCH}" "${YMS_MANAGER_REPO_SHIP}" "${YMS_MANAGER_DIR}"
+retry clone_yms
 git config --global --add safe.directory "${YMS_MANAGER_DIR}"
 chown -R "${BASE_USER}:${BASE_USER}" "${YMS_MANAGER_DIR}"
 

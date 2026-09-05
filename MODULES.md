@@ -31,8 +31,9 @@ This ensures **zero breaking changes** from upstream without losing security pat
 | yumi-config | YumiOS original | First-boot wizard |
 | usb-automount | YumiOS original → `Yumi-Lab/yumi-automount` | USB auto-mount service |
 | mcu-rpi | YumiOS original | RPi MCU support |
-| cpu_governor | YumiOS original | Fixed 912 MHz governor for SmartPad |
-| armbian_net | CustomPiOS original | Network configurator |
+| cpu_governor | YumiOS original | One fixed CPU frequency (`CPU_GOVERNOR_FREQ_KHZ`, 960 MHz) — cpufrequtils on Armbian, dietpi.txt on DietPi |
+| armbian_net | CustomPiOS original | Network configurator (Armbian base only) |
+| dietpi | YumiOS original | DietPi-SmartPi base → YumiOS (NetworkManager, OpenSSH, logs, zram, first run, Armbian tooling baseline) |
 | base | CustomPiOS original | Base OS setup |
 
 ---
@@ -46,6 +47,57 @@ This ensures **zero breaking changes** from upstream without losing security pat
 | yumi-automount | Rewritten from scratch (50 lines) |
 
 ---
+
+## Base images
+
+| Config | Base | Module chain |
+|--------|------|--------------|
+| `armbian/smartpi-debian` | `Yumi-Lab/SmartPi-armbian` v1.7.0, Bookworm server | `base(udev_fix,armbian(armbian_net,…))` |
+| `armbian/smartpi-trixie` | `Yumi-Lab/SmartPi-armbian` v1.8.0-rc1, Trixie server | same |
+| `dietpi/smartpi-trixie` | `Yumi-Lab/DietPi-SmartPi` v1.8.0-rc5, Trixie (DietPi conversion of the SmartPi-armbian server image) | `base(udev_fix,dietpi,armbian(…))` — no `armbian_net` |
+
+`config/dietpi/default` sources `config/armbian/default` (same SmartPi ONE hardware, U-Boot,
+kernel, `armbianEnv.txt`, FAT `/boot`) and only overrides the download origin, `BASE_DISTRO`,
+`ARMBIAN_DEPS` (no `armbian-config` on DietPi) and the module chain.
+
+### What the `dietpi` module puts back
+
+The DietPi installer reshapes the userland of the Armbian server image. The module runs right
+after `base`, before `armbian`, and restores what the YumiOS stack relies on:
+
+| DietPi state | YumiOS needs | Module action |
+|---|---|---|
+| ifupdown + wpa_supplicant, no NetworkManager | NM (sonar dispatcher, KlipperScreen network panel) | installs NM, `/etc/network/interfaces` keeps `lo` only |
+| Dropbear | OpenSSH (SAV reverse tunnel, sftp) | purges Dropbear, installs OpenSSH, deletes the build-time host keys; `yumi-ssh-hostkeys.service` regenerates them on the pad (Debian's `sshd-keygen.service` has `ConditionFirstBoot=yes`, never true on a populated image) |
+| `dietpi-firstboot` writes `PermitRootLogin yes` in `sshd_config.d/dietpi.conf` | no root over SSH (Armbian parity) | `sshd_config.d/00-yumi.conf` sorts first, sshd keeps the first value |
+| serial getty enabled on ttyS0…ttyS31 (every ttyS of the conversion runner) | only the kernel console getty; ttyS1/ttyS2 are Klipper UARTs | removes the `serial-getty@ttyS*` symlinks, systemd-getty-generator handles `console=ttyS0` |
+| cfg80211 blacklisted until `dietpi-firstboot` lifts it | WiFi from the first boot, not from a first-boot script | deletes `modprobe.d/dietpi-disable_wifi.conf` at build |
+| `systemd-logind` masked (`AUTO_UNMASK_LOGIND=0`) | logind running as on Armbian (sessions for pam, polkit, X) | unmasks it, preseeds `AUTO_UNMASK_LOGIND=1` |
+| `usb-gadget-net.service` sets 172.22.1.1 on usb0 (SSH over the OTG cable) | keep it with NetworkManager installed | `NetworkManager/conf.d/usb-gadget-unmanaged.conf` leaves usb0 unmanaged |
+| `/var/log` = 50 MB tmpfs (dietpi-ramlog) | on-disk logs + rsyslog | drops the fstab line, disables ramlog |
+| swapfile on the SD card at first boot | zram (Armbian parity) | `zram-tools`, `AUTO_SETUP_SWAPFILE_SIZE=0` |
+| automated first run: dietpi-update + dietpi-software + reboot, root autologin on tty1 | the YumiOS firstboot wizard | `AUTO_SETUP_AUTOMATED=0`, `.install_stage=2` right after `dietpi-firstboot` (drop-in) |
+| hostname `DietPi`, gb keyboard, London timezone | `BASE_OVERRIDE_HOSTNAME`, us, UTC | `dietpi.txt` preseeds via `yumi-dietpi-txt` |
+| `verbosity=4` in `armbianEnv.txt` | 1 (Plymouth splash) | rewrites the key |
+| `net.ifnames=0` in `extraargs` (Ethernet = eth0) | `end0`: the YUMI ID (KlipperScreen, QC wizard, YUMI_SYNC) is the MAC of `end0` | removes the token, predictable names as on Armbian |
+| cpufrequtils ignored, `dietpi-preboot` applies `dietpi.txt` | fixed 960 MHz | `cpu_governor` writes `CONFIG_CPU_*` (performance, min = max) |
+
+`dietpi-firstboot` itself is kept: hostname, root password (`BASE_USER_PASSWORD`), locale,
+timezone, machine-id, and `dietpi-fs_partition_resize` expands the root filesystem.
+
+## Initramfs — built at image build time
+
+`update-initramfs -u` without `-k` is a **silent no-op** in the build chroot: the bases ship no
+`/var/lib/initramfs-tools` record and `uname -r` is the CI runner kernel, so nothing is done
+and the command exits 0. Images built until 2026-06 therefore shipped the untouched base
+initrd and the firstboot wizard rebuilt it on the pad — the step behind un-bootable pads
+(`Kernel panic - not syncing: Attempted to kill init! exitcode=0x00007f00`, i.e. the
+initramfs could not exec `run-init` after `init-bottom`).
+
+The `smartpad` module now runs `update-initramfs -u -k <installed kernel>` and fails the build
+unless `lsinitramfs` shows `run-init`, the klibc loader it links against, the Plymouth theme
+and `two-step.so`, and unless `/boot/uInitrd` wraps exactly that initrd. `bootlogo=true` is
+set at build time; the wizard no longer touches the initramfs or the boot logo.
 
 ## Fork Governance
 

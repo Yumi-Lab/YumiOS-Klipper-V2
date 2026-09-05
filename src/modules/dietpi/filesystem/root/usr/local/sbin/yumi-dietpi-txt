@@ -1,0 +1,27 @@
+#!/bin/sh
+# Set KEY=VALUE in /boot/dietpi.txt (DietPi reads the first occurrence of a key).
+# Replaces an existing (possibly commented-out) entry, appends the key otherwise,
+# and fails loudly when the result cannot be read back.
+#
+# Usage: yumi-dietpi-txt KEY VALUE [FILE]
+set -eu
+
+key="$1"
+value="$2"
+file="${3:-/boot/dietpi.txt}"
+
+if [ ! -f "${file}" ]; then
+    echo "yumi-dietpi-txt: ${file} not found" >&2
+    exit 1
+fi
+
+if grep -q "^#\{0,1\}[[:blank:]]*${key}=" "${file}"; then
+    sed -i "s|^#\{0,1\}[[:blank:]]*${key}=.*|${key}=${value}|" "${file}"
+else
+    printf '%s=%s\n' "${key}" "${value}" >> "${file}"
+fi
+
+if ! grep -qxF "${key}=${value}" "${file}"; then
+    echo "yumi-dietpi-txt: failed to set ${key}=${value} in ${file}" >&2
+    exit 1
+fi
