@@ -78,6 +78,7 @@ after `base`, before `armbian`, and restores what the YumiOS stack relies on:
 | automated first run: dietpi-update + dietpi-software + reboot, root autologin on tty1 | the YumiOS firstboot wizard | `AUTO_SETUP_AUTOMATED=0`, `.install_stage=2` right after `dietpi-firstboot` (drop-in) |
 | hostname `DietPi`, gb keyboard, London timezone | `BASE_OVERRIDE_HOSTNAME`, us, UTC | `dietpi.txt` preseeds via `yumi-dietpi-txt` |
 | `verbosity=4` in `armbianEnv.txt` | 1 (Plymouth splash) | rewrites the key |
+| `net.ifnames=0` in `extraargs` (Ethernet = eth0) | `end0`: the YUMI ID (KlipperScreen, QC wizard, YUMI_SYNC) is the MAC of `end0` | removes the token, predictable names as on Armbian |
 | cpufrequtils ignored, `dietpi-preboot` applies `dietpi.txt` | fixed 960 MHz | `cpu_governor` writes `CONFIG_CPU_*` (performance, min = max) |
 
 `dietpi-firstboot` itself is kept: hostname, root password (`BASE_USER_PASSWORD`), locale,

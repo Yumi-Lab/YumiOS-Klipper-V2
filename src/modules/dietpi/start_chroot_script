@@ -125,10 +125,21 @@ yumi-dietpi-txt CONFIG_CHECK_DIETPI_UPDATES 0     # Moonraker's update manager i
 yumi-dietpi-txt CONFIG_CHECK_APT_UPDATES 0
 yumi-dietpi-txt CONFIG_NTP_MODE 4                 # systemd-timesyncd as a daemon (printers stay on for days)
 
-## Step 7: armbianEnv.txt — undo the installer's console verbosity
+## Step 7: armbianEnv.txt — undo what the installer changed in the kernel command line
 : "${ARMBIAN_CONFIG_TXT_FILE:?armbian module config not loaded}"
+### console verbosity (4 scribbles over the Plymouth splash; Armbian's default is 1)
 sed -i '/^verbosity=/d' "${ARMBIAN_CONFIG_TXT_FILE}"
 echo "verbosity=${DIETPI_VERBOSITY}" >> "${ARMBIAN_CONFIG_TXT_FILE}"
+### net.ifnames=0 renames the H3 Ethernet port end0 → eth0. The YumiOS stack keys on
+### end0: the YUMI ID shown by KlipperScreen and printed by the QC wizard is the MAC of
+### end0, YUMI_SYNC reads it too — on the first DietPi pad the ID came up "UNKNOWN".
+### Predictable names also keep USB WiFi dongles as wlx*, which the sonar dispatcher
+### matches. Same naming as the Armbian base, same identity for the same board.
+sed -i -E 's/^(extraargs=.*)[[:space:]]net\.ifnames=0/\1/; s/^extraargs=net\.ifnames=0[[:space:]]*/extraargs=/' "${ARMBIAN_CONFIG_TXT_FILE}"
+if grep -q "net.ifnames=0" "${ARMBIAN_CONFIG_TXT_FILE}"; then
+    echo_red "net.ifnames=0 still present in ${ARMBIAN_CONFIG_TXT_FILE}"
+    exit 1
+fi
 
 ## Step 8: leftovers of the conversion
 ### dangling symlink to a unit the installer removed with the Armbian BSP
