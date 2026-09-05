@@ -168,9 +168,10 @@ XCONF
 
 step_free_ram() (
     set -e
-    # yumi-anc pulls python3-scipy (numpy/BLAS) loaded by Klipper. These services
-    # boot at the same time as this wizard and OOM/thrash the 1 GB H3 board during
-    # the MCU compile. Stop them first; they all restart after the reboot.
+    # yumi-anc pulls python3-scipy (numpy/BLAS) loaded by Klipper. firstboot.service
+    # is ordered Before= the printer stack so these normally never start while the
+    # wizard runs; this step is the belt to that braces (an operator-started service,
+    # an older unit file) — nothing here must be active during the MCU compile.
     echo "Free memory before:"; free -m || echo "(free unavailable)"
     for svc in klipper moonraker crowsnest sonar moonraker-app-yumi-lab; do
         # systemctl is-active sort en code 3 pour tout etat != active (inactive,

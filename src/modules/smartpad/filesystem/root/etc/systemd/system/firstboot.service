@@ -1,6 +1,15 @@
 [Unit]
 Description=YumiOS First Boot Setup
-After=multi-user.target
+# Start as soon as the consoles exist and Plymouth has left the screen. Not after
+# multi-user.target: that one waits for network-online.target (NetworkManager-wait-online
+# blocks up to a minute on a pad without network yet) and for every service, none of
+# which the wizard needs — on the bench that showed as "the system waits for something"
+# for a minute or two before the wizard appeared.
+After=getty.target plymouth-quit.service
+# The MCU compile needs the RAM: hold the printer stack back while the wizard runs.
+# It reboots when done, so nothing is lost; on the error screen the pad stays
+# reachable over SSH (ssh.service is not held).
+Before=klipper.service klipper-mcu.service moonraker.service moonraker-app-yumi-lab.service crowsnest.service sonar.service
 ConditionPathExists=/.firstboot
 
 [Service]
