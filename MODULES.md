@@ -71,6 +71,8 @@ after `base`, before `armbian`, and restores what the YumiOS stack relies on:
 | Dropbear | OpenSSH (SAV reverse tunnel, sftp) | purges Dropbear, installs OpenSSH, deletes the build-time host keys (Debian's `sshd-keygen.service` makes per-device ones) |
 | `dietpi-firstboot` writes `PermitRootLogin yes` in `sshd_config.d/dietpi.conf` | no root over SSH (Armbian parity) | `sshd_config.d/00-yumi.conf` sorts first, sshd keeps the first value |
 | serial getty enabled on ttyS0…ttyS31 (every ttyS of the conversion runner) | only the kernel console getty; ttyS1/ttyS2 are Klipper UARTs | removes the `serial-getty@ttyS*` symlinks, systemd-getty-generator handles `console=ttyS0` |
+| cfg80211 blacklisted until `dietpi-firstboot` lifts it | WiFi from the first boot, not from a first-boot script | deletes `modprobe.d/dietpi-disable_wifi.conf` at build |
+| `usb-gadget-net.service` sets 172.22.1.1 on usb0 (SSH over the OTG cable) | keep it with NetworkManager installed | `NetworkManager/conf.d/usb-gadget-unmanaged.conf` leaves usb0 unmanaged |
 | `/var/log` = 50 MB tmpfs (dietpi-ramlog) | on-disk logs + rsyslog | drops the fstab line, disables ramlog |
 | swapfile on the SD card at first boot | zram (Armbian parity) | `zram-tools`, `AUTO_SETUP_SWAPFILE_SIZE=0` |
 | automated first run: dietpi-update + dietpi-software + reboot, root autologin on tty1 | the YumiOS firstboot wizard | `AUTO_SETUP_AUTOMATED=0`, `.install_stage=2` right after `dietpi-firstboot` (drop-in) |

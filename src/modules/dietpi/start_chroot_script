@@ -40,7 +40,7 @@ fi
 
 echo_green "Adapting the DietPi base to YumiOS ..."
 
-## Step 1: files (dietpi.txt helper, first-run drop-in, sshd hardening drop-in)
+## Step 1: files (dietpi.txt helper, first-run drop-in, sshd hardening, NM usb0 exclusion)
 unpack /filesystem/root /
 chmod 755 /usr/local/sbin/yumi-dietpi-txt
 
@@ -94,6 +94,10 @@ IFACES
 rm -f /etc/network/interfaces.d/*
 systemctl_if_exists enable NetworkManager.service
 systemctl_if_exists disable dietpi-wifi-monitor.service
+### The installer blacklists cfg80211 (WIFI_REQUIRED aside, it ships the image with
+### WiFi off) and only dietpi-firstboot lifts it, on the pad's first boot. WiFi is a
+### core feature here, so do not leave it to a first-boot script.
+rm -f /etc/modprobe.d/dietpi-disable_wifi.conf
 
 ## Step 4: logs on disk (Armbian parity), no DietPi ramlog
 sed -i '\#[[:blank:]]/var/log[[:blank:]]#d' /etc/fstab
