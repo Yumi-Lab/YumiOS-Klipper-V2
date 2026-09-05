@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+# Shebang for better file detection
+#### dietpi module — adapt the DietPi-SmartPi base (Yumi-Lab/DietPi-SmartPi) to YumiOS
+# shellcheck disable=all
+
+# DietPi's own first-boot configuration file, read by dietpi-firstboot and dietpi-preboot
+[ -n "$DIETPI_TXT" ] || DIETPI_TXT="/boot/dietpi.txt"
+
+# What the DietPi installer stripped and the YumiOS stack needs back:
+#  network-manager  — sonar dispatcher, KlipperScreen network panel, WiFi wizard
+#  openssh-*        — replaces Dropbear (SAV reverse tunnel, sftp)
+#  rsyslog          — full on-disk logs like the Armbian base (post-mortem on a pad)
+#  zram-tools       — swap in RAM instead of DietPi's swapfile on the SD card
+[ -n "$DIETPI_DEPS" ] || DIETPI_DEPS="network-manager openssh-server openssh-client rsyslog zram-tools"
+[ -n "$DIETPI_PURGE_PKGS" ] || DIETPI_PURGE_PKGS="dropbear dropbear-bin dropbear-run"
+
+# dietpi-firstboot applies these on the pad's first boot (DietPi defaults: gb / GB / London)
+[ -n "$DIETPI_LOCALE" ] || DIETPI_LOCALE="C.UTF-8"
+[ -n "$DIETPI_KEYBOARD" ] || DIETPI_KEYBOARD="us"
+[ -n "$DIETPI_TIMEZONE" ] || DIETPI_TIMEZONE="UTC"
+
+# zram swap size, percent of RAM (Armbian's armbian-zram-config default)
+[ -n "$DIETPI_ZRAM_PERCENT" ] || DIETPI_ZRAM_PERCENT=50
+
+# Kernel console log level in armbianEnv.txt (the DietPi installer sets 4 = very
+# chatty, Armbian's default is 1 — anything else scribbles over the Plymouth splash)
+[ -n "$DIETPI_VERBOSITY" ] || DIETPI_VERBOSITY=1

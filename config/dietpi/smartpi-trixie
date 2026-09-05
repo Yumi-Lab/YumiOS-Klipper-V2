@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# YumiOS-Klipper-V2 — SmartPi ONE (armhf) — DietPi on Trixie (Debian 13)
+# shellcheck enable=require-variable-braces
+# shellcheck disable=SC2034
+
+# Base image: DietPi-SmartPi release, converted from the SmartPi-armbian release of the
+# same tag. v1.8.0-rc5 carries the kernel clock fix (boot hang of rc1..rc4) and no
+# longer force-enables the 1368 MHz overclock (opt-in: sudo smartpi-oc on).
+DIETPI_RELEASE_TAG="v1.8.0-rc5"
+DIETPI_IMAGE_NAME="Yumi-smartpi1-trixie-debian13-dietpi-2026-08-06-0709"
+DOWNLOAD_URL_IMAGE="${DOWNLOAD_BASE_URL}/${DIETPI_RELEASE_TAG}/${DIETPI_IMAGE_NAME}.img.xz"
+DOWNLOAD_URL_CHECKSUM="${DOWNLOAD_URL_IMAGE}.sha256"
+
+# Disk size (MB) — the DietPi image is shrunk to its minimum + 200 MB
+BASE_IMAGE_ENLARGEROOT=6000
+
+# Architecture
+BASE_ARCH="armhf"
+
+# OS naming → YumiOS-<version>-smartpi-trixie-trixie-debian13-dietpi-<date>.img.xz
+# (DietPi-SmartPi's own convention, and distinct from the armbian/smartpi-trixie artifact)
+BASE_OS_CODENAME="trixie"
+BASE_OS_VERSION="debian13-dietpi"
+
+export BASE_ARCH
+export BASE_IMAGE_ENLARGEROOT
+export BASE_OS_CODENAME
+export BASE_OS_VERSION
+export DOWNLOAD_URL_CHECKSUM
+export DOWNLOAD_URL_IMAGE

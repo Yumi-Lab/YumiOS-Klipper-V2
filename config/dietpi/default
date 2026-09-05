@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# YumiOS-Klipper-V2 — DietPi base (Yumi-Lab/DietPi-SmartPi)
+# shellcheck enable=require-variable-braces
+# shellcheck disable=SC2034
+
+# Same SmartPi ONE hardware, U-Boot, kernel and armbianEnv.txt as the armbian type:
+# everything from config/armbian/default applies. Only the base image origin, the
+# distro tag and the module chain differ.
+#
+# This file is concatenated into src/config by the CI action (BASH_SOURCE = src/config)
+# or sourced in place (BASH_SOURCE = config/dietpi/default): resolve both layouts, the
+# way config/default does for src/version.
+dietpi_source_armbian_default() {
+    local here candidate
+    here="$(dirname -- "${BASH_SOURCE[0]}")"
+    for candidate in "${here}/../config/armbian/default" "${here}/../armbian/default"; do
+        if [[ -f "${candidate}" ]]; then
+            # shellcheck disable=SC1090
+            source "${candidate}"
+            return 0
+        fi
+    done
+    echo "config/dietpi/default: config/armbian/default not found next to ${here}" >&2
+    return 1
+}
+dietpi_source_armbian_default
+
+# Base image: DietPi conversion of the SmartPi-armbian server image
+DOWNLOAD_BASE_URL="https://github.com/Yumi-Lab/DietPi-SmartPi/releases/download"
+BASE_DISTRO="dietpi"
+
+# armbian-config has no purpose on DietPi (dietpi-config is there) and would pull the
+# Armbian BSP back in: keep the generic tools of the armbian module only.
+ARMBIAN_DEPS="avahi-daemon iptables bash-completion"
+
+# Module chain: the dietpi module sits right after base so OpenSSH and NetworkManager
+# exist before the armbian module hardens sshd and drops its NM conf.d files.
+# armbian_net (Armbian first-run network configurator) has nothing to patch on a
+# DietPi rootfs. yms-manager and yumi-anc stay last, after smartpad (see armbian type).
+MODULES="base(udev_fix,dietpi,armbian(yumios,klipper,is_req_preinstall,moonraker,mainsail,timelapse,klipperscreen,crowsnest,sonar,usb-automount,cpu_governor,mcu-rpi,tmc-autotune,smartpad,yms-manager,yumi-anc))"
+
+export DOWNLOAD_BASE_URL
+export BASE_DISTRO
+export ARMBIAN_DEPS
+export MODULES

@@ -1,0 +1,14 @@
+[Unit]
+Description=Generate unique SSH host keys on first boot
+# The keys created by the openssh-server install at image build time are deleted
+# from the image: every pad must have its own. sshd -t (ssh.service ExecStartPre)
+# refuses to start without them, hence the ordering.
+Before=ssh.service
+ConditionPathExists=!/etc/ssh/ssh_host_ed25519_key
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/ssh-keygen -A
+
+[Install]
+WantedBy=multi-user.target
