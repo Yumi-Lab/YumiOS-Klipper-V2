@@ -20,7 +20,7 @@ This ensures **zero breaking changes** from upstream without losing security pat
 | klipperscreen | `Yumi-Lab/KlipperScreen@yumi-stable` | Touch UI |
 | mainsail | `Yumi-Lab/mainsail@yumi-stable` | Web UI |
 | crowsnest | `Yumi-Lab/crowsnest@yumi-stable` | Webcam streaming |
-| sonar | `Yumi-Lab/sonar@yumi-stable` | WiFi keepalive daemon |
+| sonar | `Yumi-Lab/sonar@main` | WiFi keepalive daemon |
 | mainsail-config | `Yumi-Lab/mainsail-config@yumi-stable` | Default printer.cfg templates |
 | timelapse | `Yumi-Lab/moonraker-timelapse@yumi-stable` | Timelapse plugin for Moonraker |
 | tmc-autotune | `Yumi-Lab/klipper_tmc_autotune@yumi-stable` | TMC driver auto-tuning |

@@ -94,18 +94,29 @@ popd &> /dev/null || exit 1
 ## driver reload only if the adapter sees no AP). 30 s x 3 gave a first attempt 90 s
 ## after the loss and ~10 min to be back on the bench; 15 s x 2 = 30 s. Not shorter:
 ## the recovery itself takes ~80 s and hammering the RTL8188EU dongle wedges it.
-echo_green "Writing sonar.conf (enabled, 15s interval, recovery after 2 cycles) ..."
+## A link can also be half-alive: association and IP kept while most frames are lost
+## (RTL8188EU beacon loss on a crowded 2.4 GHz channel). `loss_threshold` makes a check fail
+## from 50 % packet loss (4 pings, each lost reply bounded to 1 s) and `loss_streak` asks for
+## 2 consecutive failed checks before reconnecting -> ~20 s to react, one bad burst ignored.
+## `soft_recoveries_before_reload` 3: a dongle that associates but never gets a lease
+## (half-wedged, "connected" without IP) gets its driver reloaded after 3 soft reconnects
+## (~1 min) instead of looping on nmcli forever — bench 2026-09-06, three drops fixed only by
+## replugging the dongle.
+echo_green "Writing sonar.conf (enabled, 10s interval, 50% loss over 2 checks, recovery after 2 cycles, driver reload after 3 soft recoveries) ..."
 cat <<'SONAREOF' > "/home/${BASE_USER}/printer_data/config/sonar.conf"
 [sonar]
 enable: true
 debug_log: false
 persistent_log: false
 target: auto
-count: 3
-interval: 15
+count: 4
+interval: 10
 restart_threshold: 3
+loss_threshold: 50
+loss_streak: 2
 dongle_recovery: true
 dongle_recovery_threshold: 2
+soft_recoveries_before_reload: 3
 SONAREOF
 chown "${BASE_USER}:${BASE_USER}" "/home/${BASE_USER}/printer_data/config/sonar.conf"
 
