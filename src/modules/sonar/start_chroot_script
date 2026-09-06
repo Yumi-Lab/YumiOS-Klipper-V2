@@ -98,7 +98,11 @@ popd &> /dev/null || exit 1
 ## (RTL8188EU beacon loss on a crowded 2.4 GHz channel). `loss_threshold` makes a check fail
 ## from 50 % packet loss (4 pings, each lost reply bounded to 1 s) and `loss_streak` asks for
 ## 2 consecutive failed checks before reconnecting -> ~20 s to react, one bad burst ignored.
-echo_green "Writing sonar.conf (enabled, 10s interval, 50% loss over 2 checks, recovery after 2 cycles) ..."
+## `soft_recoveries_before_reload` 3: a dongle that associates but never gets a lease
+## (half-wedged, "connected" without IP) gets its driver reloaded after 3 soft reconnects
+## (~1 min) instead of looping on nmcli forever — bench 2026-09-06, three drops fixed only by
+## replugging the dongle.
+echo_green "Writing sonar.conf (enabled, 10s interval, 50% loss over 2 checks, recovery after 2 cycles, driver reload after 3 soft recoveries) ..."
 cat <<'SONAREOF' > "/home/${BASE_USER}/printer_data/config/sonar.conf"
 [sonar]
 enable: true
@@ -112,6 +116,7 @@ loss_threshold: 50
 loss_streak: 2
 dongle_recovery: true
 dongle_recovery_threshold: 2
+soft_recoveries_before_reload: 3
 SONAREOF
 chown "${BASE_USER}:${BASE_USER}" "/home/${BASE_USER}/printer_data/config/sonar.conf"
 
